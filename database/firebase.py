@@ -1,4 +1,6 @@
+import base64
 import datetime as dt
+import json
 import os
 
 from google.cloud import firestore
@@ -8,13 +10,27 @@ from . import models
 
 
 def init_firestore():
-    """Initializes the Firestore client using service account credentials."""
-    credential_path = os.getenv("FIREBASE_CREDS_PATH")
+    """Initializes the Firestore client using service account credentials.
 
+    Checks for FIREBASE_CREDS_JSON (base64-encoded, for production) first,
+    then falls back to FIREBASE_CREDS_PATH (file path, for local dev).
+    """
     try:
-        credentials = service_account.Credentials.from_service_account_file(
-            credential_path
-        )
+        creds_json = os.getenv("FIREBASE_CREDS_JSON")
+        creds_path = os.getenv("FIREBASE_CREDS_PATH")
+
+        if creds_json:
+            creds_dict = json.loads(base64.b64decode(creds_json))
+            credentials = service_account.Credentials.from_service_account_info(
+                creds_dict
+            )
+        elif creds_path:
+            credentials = service_account.Credentials.from_service_account_file(
+                creds_path
+            )
+        else:
+            raise ValueError("Set FIREBASE_CREDS_JSON or FIREBASE_CREDS_PATH")
+
         client = firestore.Client(project="whatsapp-llm-test", credentials=credentials)
         return client
     except Exception as e:
