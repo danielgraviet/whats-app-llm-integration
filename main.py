@@ -10,7 +10,6 @@ from services import conversation_service, trust_service
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename="testing.log", encoding="utf-8", level=logging.DEBUG)
 
-_VERIFICATION_TOKEN = "dannygraviet"
 
 app = FastAPI()
 
@@ -162,7 +161,7 @@ def verify_whatsapp(
         ..., description="The verification token", alias="hub.verify_token"
     ),
 ):
-    if hub_mode == "subscribe" and hub_verify_token == _VERIFICATION_TOKEN:
+    if hub_mode == "subscribe" and hub_verify_token == settings.VERIFY_TOKEN:
         return hub_challenge
     raise HTTPException(status_code=403, detail="Invalid verification token")
 

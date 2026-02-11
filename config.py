@@ -13,6 +13,7 @@ class Settings:
     ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     TRUST_CHECK_INTERVAL = int(os.getenv("TRUST_CHECK_INTERVAL", "3"))
+    VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 
 
 settings = Settings()
