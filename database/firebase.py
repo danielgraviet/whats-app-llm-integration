@@ -151,6 +151,36 @@ def update_intro_sent(client, phone_number: str) -> bool:
         return False
 
 
+def save_pending_response(client, phone_number: str, ai_response: str) -> bool:
+    """Stores an AI response to send after the user completes a check-in rating."""
+    try:
+        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref.update(
+            {"pending_ai_response": ai_response, "updated_at": dt.datetime.now()}
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving pending response: {e}")
+        return False
+
+
+def get_and_clear_pending_response(client, phone_number: str) -> str:
+    """Retrieves and clears the stored pending AI response."""
+    try:
+        doc_ref = client.collection("conversations").document(phone_number)
+        doc = doc_ref.get()
+        if doc.exists:
+            pending = doc.to_dict().get("pending_ai_response", "")
+            doc_ref.update(
+                {"pending_ai_response": "", "updated_at": dt.datetime.now()}
+            )
+            return pending
+        return ""
+    except Exception as e:
+        print(f"Error getting pending response: {e}")
+        return ""
+
+
 def delete_conversation(client, phone_number: str) -> bool:
     try:
         client.collection("conversations").document(phone_number).delete()

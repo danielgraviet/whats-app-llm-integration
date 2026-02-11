@@ -133,7 +133,11 @@ async def _handle_check_in_rating(
         client, phone_number, score, message_index=conversation.user_turn_count
     )
     firebase.update_conversation_phase(client, phone_number, "normal")
-    return BotResponse()
+    pending = firebase.get_and_clear_pending_response(client, phone_number)
+    messages = ["Thanks for answering!"]
+    if pending:
+        messages.append(pending)
+    return BotResponse(text_messages=messages)
 
 
 async def _handle_normal_message(
@@ -160,6 +164,7 @@ async def _handle_normal_message(
 
     # Check if it's time for a rating after processing
     if trust_service.should_trigger_check_in(new_turn_count):
+        firebase.save_pending_response(client, phone_number, ai_response)
         firebase.update_conversation_phase(
             client,
             phone_number,
@@ -167,7 +172,6 @@ async def _handle_normal_message(
             user_turn_count=new_turn_count,
         )
         return BotResponse(
-            text_messages=[ai_response],
             send_trust_list=True,
             trust_list_language=conversation.language,
             trust_list_prompt_key="check_in",

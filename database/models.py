@@ -35,6 +35,7 @@ class Conversation(pydantic.BaseModel):
     feeling_array: List[TrustRating] = []
     user_turn_count: int = 0
     intro_sent: bool = False
+    pending_ai_response: str = ""
 
     def to_firestore(self) -> dict:
         """Converts the model to a dict, ensuring datetimes are handled."""
