@@ -1,0 +1,7 @@
+.env
+*.json
+!package.json
+__pycache__/
+*.pyc
+testing.log
+.DS_Store
