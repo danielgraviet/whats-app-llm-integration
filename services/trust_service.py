@@ -20,7 +20,7 @@ TRUST_PROMPTS = {
             "Please select your rating from the list below."
         ),
         "rating_received": (
-            "Thank you for sharing. Let's continue our conversation. What were you about to ask?"
+            "Thank you for sharing your rating. To get us started, I’d love to hear your thoughts—what comes to mind when you think about the electronic voting system in Brazil?"
         ),
     },
     "PT": {
@@ -44,6 +44,17 @@ TRUST_PROMPTS = {
         ),
     },
 }
+
+
+def parse_text_rating(text: str) -> int | None:
+    """Try to extract a valid 1-10 rating from plain text like '7'."""
+    try:
+        value = int(text.strip())
+        if 1 <= value <= 10:
+            return value
+    except ValueError:
+        pass
+    return None
 
 
 def parse_interactive_rating(list_reply_id: str) -> int | None:
@@ -80,4 +91,19 @@ def get_trust_prompt(language: str, prompt_key: str) -> str:
     lang = language.upper()
     if lang not in TRUST_PROMPTS:
         lang = "EN"
-    return TRUST_PROMPTS[lang][prompt_key]
+    prompt = TRUST_PROMPTS[lang][prompt_key]
+    if not settings.USE_FLOWS:
+        prompt = prompt.replace(
+            "Please select your rating from the list below.",
+            "Please reply with a number from 1 to 10.",
+        ).replace(
+            "please use the list below to select your rating.",
+            "please reply with a number from 1 to 10.",
+        ).replace(
+            "Por favor, selecione sua avaliacao na lista abaixo.",
+            "Por favor, responda com um numero de 1 a 10.",
+        ).replace(
+            "Por favor, use a lista abaixo para selecionar sua avaliacao.",
+            "Por favor, responda com um numero de 1 a 10.",
+        )
+    return prompt

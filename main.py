@@ -1,3 +1,4 @@
+import json
 import logging
 
 import httpx
@@ -31,12 +32,15 @@ async def process_whatsapp_ai(phone_number: str, message_text: str, msg_type: st
         for text in bot_response.text_messages:
             await send_message_to_whatsapp(phone_number, text)
 
-        if bot_response.send_trust_list:
-            list_description_text = trust_service.get_trust_prompt(
-                language=bot_response.trust_list_language,
-                prompt_key=bot_response.trust_list_prompt_key,
+        if bot_response.send_trust_flow:
+            body_text = trust_service.get_trust_prompt(
+                language=bot_response.trust_flow_language,
+                prompt_key=bot_response.trust_flow_prompt_key,
             )
-            await send_interactive_list_to_whatsapp(phone_number, list_description_text)
+            if settings.USE_FLOWS:
+                await send_flow_to_whatsapp(phone_number, body_text)
+            else:
+                await send_message_to_whatsapp(phone_number, body_text)
 
     except Exception as e:
         print(f"[ERROR] process_whatsapp_ai failed: {e}")
@@ -62,8 +66,8 @@ async def send_message_to_whatsapp(to_phone: str, text: str):
             logger.debug("WhatsApp API success: %s", response.text)
 
 
-async def send_interactive_list_to_whatsapp(to_phone: str, list_description_text: str):
-    logging.debug("[DEBUG] LIST being sent back to WhatsAPP")
+async def send_flow_to_whatsapp(to_phone: str, body_text: str):
+    logging.debug("[DEBUG] FLOW being sent back to WhatsApp")
     url = f"https://graph.facebook.com/v22.0/{settings.PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {settings.ACCESS_TOKEN}"}
     payload = {
@@ -71,26 +75,17 @@ async def send_interactive_list_to_whatsapp(to_phone: str, list_description_text
         "to": to_phone,
         "type": "interactive",
         "interactive": {
-            "type": "list",
-            "body": {"text": list_description_text},
+            "type": "flow",
+            "body": {"text": body_text},
             "action": {
-                "button": "Select Rating",
-                "sections": [
-                    {
-                        "rows": [
-                            {"id": "rating_10", "title": "10 - Complete trust"},
-                            {"id": "rating_9", "title": "9"},
-                            {"id": "rating_8", "title": "8"},
-                            {"id": "rating_7", "title": "7"},
-                            {"id": "rating_6", "title": "6"},
-                            {"id": "rating_5", "title": "5"},
-                            {"id": "rating_4", "title": "4"},
-                            {"id": "rating_3", "title": "3"},
-                            {"id": "rating_2", "title": "2"},
-                            {"id": "rating_1", "title": "1 - No trust"},
-                        ]
-                    }
-                ],
+                "name": "flow",
+                "parameters": {
+                    "flow_message_version": "3",
+                    "flow_id": settings.FLOW_ID,
+                    "flow_cta": "Rate Now",
+                    "flow_action": "navigate",
+                    "flow_action_payload": {"screen": "QUESTION_ONE"},
+                },
             },
         },
     }
@@ -136,10 +131,15 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(process_whatsapp_ai, sender, text, msg_type)
             elif msg_type == "interactive" and "interactive" in message:
                 interactive = message["interactive"]
-                if interactive.get("type") == "list_reply":
-                    list_reply_id = interactive["list_reply"]["id"]
+                logger.info("Interactive message received: %s", json.dumps(interactive))
+                if interactive.get("type") == "nfm_reply":
+                    response_json = json.loads(
+                        interactive["nfm_reply"]["response_json"]
+                    )
+                    rating_value = response_json.get("trust_rating", "")
+                    reply_id = f"rating_{rating_value}"
                     background_tasks.add_task(
-                        process_whatsapp_ai, sender, list_reply_id, msg_type
+                        process_whatsapp_ai, sender, reply_id, msg_type
                     )
 
         return {"status": "accepted"}

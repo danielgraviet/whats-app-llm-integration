@@ -10,9 +10,9 @@ _N_HISTORY_TURNS = 5
 @dataclasses.dataclass
 class BotResponse:
     text_messages: list[str] = dataclasses.field(default_factory=list)
-    send_trust_list: bool = False
-    trust_list_language: str = "EN"
-    trust_list_prompt_key: str = "intro"
+    send_trust_flow: bool = False
+    trust_flow_language: str = "EN"
+    trust_flow_prompt_key: str = "intro"
 
 
 async def handle_incoming_message(
@@ -81,22 +81,22 @@ async def _handle_initial_rating(
     if not conversation.intro_sent:
         firebase.update_intro_sent(client, phone_number)
         return BotResponse(
-            send_trust_list=True,
-            trust_list_language=lang,
-            trust_list_prompt_key="intro",
+            send_trust_flow=True,
+            trust_flow_language=lang,
+            trust_flow_prompt_key="intro",
         )
 
     if msg_type == "interactive":
         score = trust_service.parse_interactive_rating(message_text)
     else:
-        score = None
+        score = trust_service.parse_text_rating(message_text)
 
     if score is None:
         return BotResponse(
             text_messages=[trust_service.get_trust_prompt(lang, "invalid")],
-            send_trust_list=True,
-            trust_list_language=lang,
-            trust_list_prompt_key="intro",
+            send_trust_flow=True,
+            trust_flow_language=lang,
+            trust_flow_prompt_key="intro",
         )
 
     # Valid rating — save and transition to normal conversation
@@ -118,14 +118,14 @@ async def _handle_check_in_rating(
     if msg_type == "interactive":
         score = trust_service.parse_interactive_rating(message_text)
     else:
-        score = None
+        score = trust_service.parse_text_rating(message_text)
 
     if score is None:
         return BotResponse(
             text_messages=[trust_service.get_trust_prompt(lang, "invalid")],
-            send_trust_list=True,
-            trust_list_language=lang,
-            trust_list_prompt_key="check_in",
+            send_trust_flow=True,
+            trust_flow_language=lang,
+            trust_flow_prompt_key="check_in",
         )
 
     # Valid rating — save and return to normal conversation
@@ -172,9 +172,9 @@ async def _handle_normal_message(
             user_turn_count=new_turn_count,
         )
         return BotResponse(
-            send_trust_list=True,
-            trust_list_language=conversation.language,
-            trust_list_prompt_key="check_in",
+            send_trust_flow=True,
+            trust_flow_language=conversation.language,
+            trust_flow_prompt_key="check_in",
         )
 
     # No check-in — just the AI response
