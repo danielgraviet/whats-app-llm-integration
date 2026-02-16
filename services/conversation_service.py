@@ -134,7 +134,7 @@ async def _handle_check_in_rating(
     )
     firebase.update_conversation_phase(client, phone_number, "normal")
     pending = firebase.get_and_clear_pending_response(client, phone_number)
-    messages = ["Thanks for answering!"]
+    messages = [] # can add a potential, "thanks for answering"
     if pending:
         messages.append(pending)
     return BotResponse(text_messages=messages)

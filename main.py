@@ -136,7 +136,7 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                     response_json = json.loads(
                         interactive["nfm_reply"]["response_json"]
                     )
-                    rating_value = response_json.get("trust_rating", "")
+                    rating_value = response_json.get("confidence_rating", "")
                     reply_id = f"rating_{rating_value}"
                     background_tasks.add_task(
                         process_whatsapp_ai, sender, reply_id, msg_type
