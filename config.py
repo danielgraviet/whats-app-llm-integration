@@ -2,7 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
-load_dotenv()
+env = os.getenv("APP_ENV", "local")
+load_dotenv(f".env.{env}")
 
 
 class Settings:
