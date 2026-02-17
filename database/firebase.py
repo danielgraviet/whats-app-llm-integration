@@ -171,9 +171,7 @@ def get_and_clear_pending_response(client, phone_number: str) -> str:
         doc = doc_ref.get()
         if doc.exists:
             pending = doc.to_dict().get("pending_ai_response", "")
-            doc_ref.update(
-                {"pending_ai_response": "", "updated_at": dt.datetime.now()}
-            )
+            doc_ref.update({"pending_ai_response": "", "updated_at": dt.datetime.now()})
             return pending
         return ""
     except Exception as e:

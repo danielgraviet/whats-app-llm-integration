@@ -1,10 +1,12 @@
 from collections import deque
 
+
 class TreeNode:
     def __init__(self, val=0, left=None, right=None):
         self.val = val
         self.left = left
         self.right = right
+
 
 def right_side_view(root):
     if not root:
@@ -12,7 +14,7 @@ def right_side_view(root):
 
     queue = deque([root])
     res = []
-    
+
     while queue:
         level_length = len(queue)
         for i in range(level_length):
@@ -24,6 +26,7 @@ def right_side_view(root):
             if node.right:
                 queue.append(node.right)
     return res
+
 
 # Test 1
 root1 = TreeNode(1, TreeNode(2, None, TreeNode(5)), TreeNode(3, None, TreeNode(4)))

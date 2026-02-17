@@ -5,22 +5,20 @@ TRUST_PROMPTS = {
         "intro": (
             "Welcome! You are participating in a research study about "
             "trust in electronic voting machines.\n\n"
-            "Before we begin, on a scale of 1 to 10, how much do you "
-            "trust Brazil's electronic voting system?\n\n"
-            "(1 = no trust at all, 10 = complete trust)\n\n"
-            "Please select your rating from the list below."
+            "To get started, please rate your current level of trust using "
+            "the '⭐ Rate Now' button below — do not type your rating in the chat."
         ),
         "invalid": (
-            "Before we continue, please use the list below to select your rating."
+            "Please use the '⭐ Rate Now' button below to submit your rating "
+            "— we're not able to record ratings sent as text messages."
         ),
         "check_in": (
-            "Quick check-in: On a scale of 1 to 10, how much do you "
-            "trust Brazil's electronic voting system right now?\n\n"
-            "(1 = no trust at all, 10 = complete trust)\n\n"
-            "Please select your rating from the list below."
+            "Quick check-in: has your level of trust changed at all? "
+            "Use the '⭐ Rate Now' button below to update your score."
         ),
         "rating_received": (
-            "Thank you for sharing your rating. To get us started, I’d love to hear your thoughts—what comes to mind when you think about the electronic voting system in Brazil?"
+            "Thank you! To get us started, I'd love to hear your thoughts — "
+            "what comes to mind when you think about the electronic voting system in Brazil?"
         ),
     },
     "PT": {
@@ -93,17 +91,22 @@ def get_trust_prompt(language: str, prompt_key: str) -> str:
         lang = "EN"
     prompt = TRUST_PROMPTS[lang][prompt_key]
     if not settings.USE_FLOWS:
-        prompt = prompt.replace(
-            "Please select your rating from the list below.",
-            "Please reply with a number from 1 to 10.",
-        ).replace(
-            "please use the list below to select your rating.",
-            "please reply with a number from 1 to 10.",
-        ).replace(
-            "Por favor, selecione sua avaliacao na lista abaixo.",
-            "Por favor, responda com um numero de 1 a 10.",
-        ).replace(
-            "Por favor, use a lista abaixo para selecionar sua avaliacao.",
-            "Por favor, responda com um numero de 1 a 10.",
+        prompt = (
+            prompt.replace(
+                "Please select your rating from the list below.",
+                "Please reply with a number from 1 to 10.",
+            )
+            .replace(
+                "please use the list below to select your rating.",
+                "please reply with a number from 1 to 10.",
+            )
+            .replace(
+                "Por favor, selecione sua avaliacao na lista abaixo.",
+                "Por favor, responda com um numero de 1 a 10.",
+            )
+            .replace(
+                "Por favor, use a lista abaixo para selecionar sua avaliacao.",
+                "Por favor, responda com um numero de 1 a 10.",
+            )
         )
     return prompt
