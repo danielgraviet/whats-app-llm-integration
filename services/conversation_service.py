@@ -133,7 +133,7 @@ async def _handle_check_in_rating(
         client, phone_number, score, message_index=conversation.user_turn_count
     )
     firebase.update_conversation_phase(client, phone_number, "normal")
-    pending = firebase.get_and_clear_pending_response(client, phone_number)
+    pending = firebase.get_and_clear_pending_response(client, phone_number) # is this stored in memory? could there be an issue with multiple users, or horizontal scaling and getting routed.
     messages = []  # can add a potential, "thanks for answering"
     if pending:
         messages.append(pending)

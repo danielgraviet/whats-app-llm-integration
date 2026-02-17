@@ -165,15 +165,28 @@ def save_pending_response(client, phone_number: str, ai_response: str) -> bool:
 
 
 def get_and_clear_pending_response(client, phone_number: str) -> str:
-    """Retrieves and clears the stored pending AI response."""
+    """Retrieves and clears the stored pending AI response atomically.
+
+    Uses a transaction so concurrent requests (e.g. webhook retries) cannot
+    both read the value before either clears it, preventing double-delivery.
+    """
     try:
         doc_ref = client.collection("conversations").document(phone_number)
-        doc = doc_ref.get()
-        if doc.exists:
+
+        @firestore.transactional
+        def _txn(transaction, doc_ref):
+            doc = doc_ref.get(transaction=transaction)
+            if not doc.exists:
+                return ""
             pending = doc.to_dict().get("pending_ai_response", "")
-            doc_ref.update({"pending_ai_response": "", "updated_at": dt.datetime.now()})
+            transaction.update(
+                doc_ref,
+                {"pending_ai_response": "", "updated_at": dt.datetime.now()},
+            )
             return pending
-        return ""
+
+        transaction = client.transaction()
+        return _txn(transaction, doc_ref)
     except Exception as e:
         print(f"Error getting pending response: {e}")
         return ""
