@@ -6,15 +6,15 @@ TRUST_PROMPTS = {
             "Welcome! You are participating in a research study about "
             "trust in electronic voting machines.\n\n"
             "To get started, please rate your current level of trust using "
-            "the '⭐ Rate Now' button below — do not type your rating in the chat."
+            "the 'Rate Now' button below — do not type your rating in the chat."
         ),
         "invalid": (
-            "Please use the '⭐ Rate Now' button below to submit your rating "
+            "Please use the 'Rate Now' button below to submit your rating "
             "— we're not able to record ratings sent as text messages."
         ),
         "check_in": (
             "Quick check-in: has your level of trust changed at all? "
-            "Use the '⭐ Rate Now' button below to update your score."
+            "Use the 'Rate Now' button below to update your score."
         ),
         "rating_received": (
             "Thank you! To get us started, I'd love to hear your thoughts — "
