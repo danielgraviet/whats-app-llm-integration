@@ -9,7 +9,14 @@ from config import settings
 from services import conversation_service, trust_service
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename="testing.log", encoding="utf-8", level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(levelname)s %(name)s %(message)s",
+    handlers=[
+        logging.FileHandler("testing.log", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
 
 
 app = FastAPI()
