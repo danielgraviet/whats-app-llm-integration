@@ -1,15 +1,5 @@
-# this file should be able to take in a user message, which could contain a long conversation history,
-# ask the LLM model the question
-# return response.
-
-# ideas
-# literal prompt template that is interchangable.
-# have customizeable system prompts that we can swap out.
-# have a config to easly switch models within the open ai ecosystem, temperature, etc.
-
-# how should I handle latentcy? what if a whats app user spams messages quickly?
-
 import openai
+import io
 
 from config import settings
 
@@ -34,3 +24,13 @@ async def get_ai_response(messages: list[dict], system_prompt: str) -> str:
     )
 
     return response.choices[0].message.content
+
+async def transcribe_audio(audio_bytes: bytes) -> str:
+    # is it smart to add a try catch block here? or should that be done elsewhere. I was thinking we try creating this new text, and if not default to "error"
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = "audio.ogg"
+    response = await client.audio.transcriptions.create(
+        model='whisper-1',
+        file=audio_file
+    )
+    return response.text
