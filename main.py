@@ -112,13 +112,17 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
             for entry in data.get("entry", []):
                 for change in entry.get("changes", []):
                     value = change.get("value", {})
-                    if value and "messages" in value:
+                    metadata = value.get("metadata", {})
+                    incoming_phone_id = metadata.get("phone_number_id")
+                    if value and "messages" in value and incoming_phone_id == settings.PHONE_NUMBER_ID:
                         messages_to_process.extend(value["messages"])
 
         # Handle direct value payload (field + value structure)
         elif data.get("field") == "messages" and "value" in data:
             value = data["value"]
-            if "messages" in value:
+            metadata = value.get("metadata", {})
+            incoming_phone_id = str(metadata.get("phone_number_id", ""))
+            if "messages" in value and incoming_phone_id == str(settings.PHONE_NUMBER_ID):
                 messages_to_process.extend(value["messages"])
 
         # Process each text message
