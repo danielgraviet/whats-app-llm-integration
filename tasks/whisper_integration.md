@@ -63,3 +63,20 @@ handle_incoming_message(..., "Hello, how are you?", "audio")
 - **Audio source**: WhatsApp voice notes only
 - **Latency target**: Best effort, not a hard constraint at this stage
 - **Scale target**: 1,000 concurrent users (real near-term goal)
+
+---
+
+## Status: Implemented and committed
+
+### What was built
+- `download_whatsapp_audio(media_id)` added to `main.py` — two sequential Meta API calls to retrieve raw audio bytes
+- `transcribe_audio(audio_bytes)` added to `integrations/openai_client.py` — passes bytes to Whisper via the existing `AsyncOpenAI` client
+- Webhook handler in `main.py` extended with an `elif` branch for `msg_type == "audio"` — extracts `media_id` and queues background task
+- `process_whatsapp_ai` intercepts audio before conversation service, downloads and transcribes, then continues as normal text
+- `_WA_HEADERS` module-level variable added to `main.py` to consolidate the repeated `Authorization` header across all three Meta API functions
+
+### Test coverage
+- `e2e/test_whisper.py` — reads a real `.ogg` file and calls `transcribe_audio()` against the live Whisper API. Test passed.
+
+### Next step
+- Deploy to Railway and send a real WhatsApp voice note to confirm the full end-to-end flow in production
