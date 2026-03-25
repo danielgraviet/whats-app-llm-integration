@@ -6,8 +6,8 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 
 import database.firebase as firebase_db
 from config import settings
-from services import conversation_service, trust_service
 from integrations import openai_client
+from services import conversation_service, trust_service
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -34,14 +34,12 @@ async def process_whatsapp_ai(phone_number: str, message_text: str, msg_type: st
     Runs as a background task after the webhook response is sent.
     """
     try:
-        
         # intercept voice messages first.
         if msg_type == "audio":
             audio_bytes = await download_whatsapp_audio(message_text)
             message_text = await openai_client.transcribe_audio(audio_bytes)
             msg_type = "text"
-        
-        
+
         bot_response = await conversation_service.handle_incoming_message(
             firestore_client, phone_number, message_text, msg_type
         )
@@ -59,8 +57,12 @@ async def process_whatsapp_ai(phone_number: str, message_text: str, msg_type: st
             else:
                 await send_message_to_whatsapp(phone_number, body_text)
 
-    except Exception as e:
-        print(f"[ERROR] process_whatsapp_ai failed: {e}")
+    except Exception:
+        logger.exception(
+            "process_whatsapp_ai failed for phone_number=%s msg_type=%s",
+            phone_number,
+            msg_type,
+        )
 
 
 async def send_message_to_whatsapp(to_phone: str, text: str):
@@ -76,14 +78,17 @@ async def send_message_to_whatsapp(to_phone: str, text: str):
         response = await client.post(url, json=payload, headers=_WA_HEADERS)
         if response.status_code != 200:
             logger.error(
-                "WhatsApp API error %s: %s", response.status_code, response.text
+                "WhatsApp API error status=%s to_phone=%s body=%s",
+                response.status_code,
+                to_phone,
+                response.text,
             )
         else:
-            logger.debug("WhatsApp API success: %s", response.text)
+            logger.debug("WhatsApp API success to_phone=%s: %s", to_phone, response.text)
 
 
 async def send_flow_to_whatsapp(to_phone: str, body_text: str):
-    logging.debug("[DEBUG] FLOW being sent back to WhatsApp")
+    logger.debug("[DEBUG] FLOW being sent back to WhatsApp")
     url = f"https://graph.facebook.com/v22.0/{settings.PHONE_NUMBER_ID}/messages"
     payload = {
         "messaging_product": "whatsapp",
@@ -108,22 +113,29 @@ async def send_flow_to_whatsapp(to_phone: str, body_text: str):
         response = await client.post(url, json=payload, headers=_WA_HEADERS)
         if response.status_code != 200:
             logger.error(
-                "WhatsApp API error %s: %s", response.status_code, response.text
+                "WhatsApp flow API error status=%s to_phone=%s body=%s",
+                response.status_code,
+                to_phone,
+                response.text,
             )
         else:
-            logger.debug("WhatsApp API success: %s", response.text)
+            logger.debug("WhatsApp flow API success to_phone=%s: %s", to_phone, response.text)
 
 
 async def download_whatsapp_audio(media_id: str) -> bytes:
     async with httpx.AsyncClient() as client:
-        r = await client.get(f"https://graph.facebook.com/v22.0/{media_id}", headers=_WA_HEADERS)
-        media_url = r.json()['url']
+        r = await client.get(
+            f"https://graph.facebook.com/v22.0/{media_id}", headers=_WA_HEADERS
+        )
+        r.raise_for_status()
+        media_url = r.json()["url"]
         audio_r = await client.get(media_url, headers=_WA_HEADERS)
+        audio_r.raise_for_status()
         return audio_r.content
-    
-    
+
+
 @app.post("/")
-async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
+async def handle_webhook(request: Request, background_tasks: BackgroundTasks): 
     """Receive incoming WhatsApp messages and queue for processing."""
     data = await request.json()
 
@@ -137,7 +149,11 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                     value = change.get("value", {})
                     metadata = value.get("metadata", {})
                     incoming_phone_id = metadata.get("phone_number_id")
-                    if value and "messages" in value and incoming_phone_id == str(settings.PHONE_NUMBER_ID):
+                    if (
+                        value
+                        and "messages" in value
+                        and incoming_phone_id == str(settings.PHONE_NUMBER_ID)
+                    ):
                         messages_to_process.extend(value["messages"])
 
         # Handle direct value payload (field + value structure)
@@ -157,7 +173,7 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
             if msg_type == "text" and "text" in message:
                 text = message["text"]["body"]
                 background_tasks.add_task(process_whatsapp_ai, sender, text, msg_type)
-            
+
             # handles flows
             elif msg_type == "interactive" and "interactive" in message:
                 interactive = message["interactive"]
@@ -171,18 +187,17 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(
                         process_whatsapp_ai, sender, reply_id, msg_type
                     )
-            
+
             # handles voice messages
             elif msg_type == "audio" and "audio" in message:
-                media_id = message['audio']['id']
+                media_id = message["audio"]["id"]
                 background_tasks.add_task(process_whatsapp_ai, sender, media_id, msg_type)
-                
 
         return {"status": "accepted"}
 
-    except Exception as e:
-        print(f"[ERROR] Webhook parsing failed: {e}")
-        return {"status": "error", "detail": str(e)}
+    except Exception:
+        logger.exception("Webhook parsing failed")
+        return {"status": "error"}
 
 
 @app.get("/")
