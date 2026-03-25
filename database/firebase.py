@@ -1,12 +1,15 @@
 import base64
 import datetime as dt
 import json
+import logging
 import os
 
 from google.cloud import firestore
 from google.oauth2 import service_account
 
 from . import models
+
+logger = logging.getLogger(__name__)
 
 
 def init_firestore():
@@ -33,8 +36,8 @@ def init_firestore():
 
         client = firestore.Client(project="whatsapp-llm-test", credentials=credentials)
         return client
-    except Exception as e:
-        print(f"Failed to create firestore client: {e}")
+    except Exception:
+        logger.exception("Failed to create Firestore client")
         raise
 
 
@@ -64,8 +67,8 @@ def save_message(
         )
 
         return True
-    except Exception as e:
-        print(f"Error saving message: {e}")
+    except Exception:
+        logger.exception("Error saving message for phone_number=%s role=%s", phone_number, role)
         return False
 
 
@@ -83,13 +86,17 @@ def get_or_create_conversation(
     doc = doc_ref.get()
 
     if doc.exists:
-        print("Returning existing conversation!")
+        logger.info("Returning existing conversation for phone_number=%s", phone_number)
         data = doc.to_dict()
         data["phone_number"] = phone_number
         convo = models.Conversation(**data)
         return convo
     else:
-        print("Creating new conversation! assigning variant...")
+        logger.info(
+            "Creating new conversation for phone_number=%s variant=%s",
+            phone_number,
+            variant,
+        )
         convo = models.Conversation(
             phone_number=phone_number,
             last_message="",
@@ -116,8 +123,12 @@ def save_trust_rating(
             merge=True,
         )
         return True
-    except Exception as e:
-        print(f"Error saving trust rating: {e}")
+    except Exception:
+        logger.exception(
+            "Error saving trust rating for phone_number=%s message_index=%s",
+            phone_number,
+            message_index,
+        )
         return False
 
 
@@ -135,8 +146,12 @@ def update_conversation_phase(
             update_data["user_turn_count"] = user_turn_count
         doc_ref.update(update_data)
         return True
-    except Exception as e:
-        print(f"Error updating conversation phase: {e}")
+    except Exception:
+        logger.exception(
+            "Error updating conversation phase for phone_number=%s phase=%s",
+            phone_number,
+            phase,
+        )
         return False
 
 
@@ -146,8 +161,8 @@ def update_intro_sent(client, phone_number: str) -> bool:
         doc_ref = client.collection("conversations").document(phone_number)
         doc_ref.update({"intro_sent": True, "updated_at": dt.datetime.now()})
         return True
-    except Exception as e:
-        print(f"Error updating intro_sent: {e}")
+    except Exception:
+        logger.exception("Error updating intro_sent for phone_number=%s", phone_number)
         return False
 
 
@@ -159,8 +174,8 @@ def save_pending_response(client, phone_number: str, ai_response: str) -> bool:
             {"pending_ai_response": ai_response, "updated_at": dt.datetime.now()}
         )
         return True
-    except Exception as e:
-        print(f"Error saving pending response: {e}")
+    except Exception:
+        logger.exception("Error saving pending response for phone_number=%s", phone_number)
         return False
 
 
@@ -187,8 +202,8 @@ def get_and_clear_pending_response(client, phone_number: str) -> str:
 
         transaction = client.transaction()
         return _txn(transaction, doc_ref)
-    except Exception as e:
-        print(f"Error getting pending response: {e}")
+    except Exception:
+        logger.exception("Error getting pending response for phone_number=%s", phone_number)
         return ""
 
 
@@ -196,6 +211,6 @@ def delete_conversation(client, phone_number: str) -> bool:
     try:
         client.collection("conversations").document(phone_number).delete()
         return True
-    except Exception as e:
-        print(f"Error deleting conversation: {e}")
+    except Exception:
+        logger.exception("Error deleting conversation for phone_number=%s", phone_number)
         return False
