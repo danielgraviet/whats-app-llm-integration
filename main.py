@@ -53,7 +53,7 @@ async def process_whatsapp_ai(phone_number: str, message_text: str, msg_type: st
                 prompt_key=bot_response.trust_flow_prompt_key,
             )
             if settings.USE_FLOWS:
-                await send_flow_to_whatsapp(phone_number, body_text)
+                await send_flow_to_whatsapp(phone_number, body_text, bot_response.trust_flow_language)
             else:
                 await send_message_to_whatsapp(phone_number, body_text)
 
@@ -87,8 +87,9 @@ async def send_message_to_whatsapp(to_phone: str, text: str):
             logger.debug("WhatsApp API success to_phone=%s: %s", to_phone, response.text)
 
 
-async def send_flow_to_whatsapp(to_phone: str, body_text: str):
+async def send_flow_to_whatsapp(to_phone: str, body_text: str, language: str = "PT"):
     logger.debug("[DEBUG] FLOW being sent back to WhatsApp")
+    flow_id = settings.FLOW_ID_PT if language.upper() == "PT" else settings.FLOW_ID_EN
     url = f"https://graph.facebook.com/v22.0/{settings.PHONE_NUMBER_ID}/messages"
     payload = {
         "messaging_product": "whatsapp",
@@ -101,7 +102,7 @@ async def send_flow_to_whatsapp(to_phone: str, body_text: str):
                 "name": "flow",
                 "parameters": {
                     "flow_message_version": "3",
-                    "flow_id": settings.FLOW_ID,
+                    "flow_id": flow_id,
                     "flow_cta": "Rate Now",
                     "flow_action": "navigate",
                     "flow_action_payload": {"screen": "QUESTION_ONE"},

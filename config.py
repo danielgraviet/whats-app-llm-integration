@@ -16,7 +16,8 @@ class Settings:
     TRUST_CHECK_INTERVAL = int(os.getenv("TRUST_CHECK_INTERVAL", "3"))
     VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
     USE_FLOWS = os.getenv("USE_FLOWS", "false").lower() == "true"
-    FLOW_ID = os.getenv("FLOW_ID", "123")
+    FLOW_ID_EN = os.getenv("FLOW_ID_EN", "123")
+    FLOW_ID_PT = os.getenv("FLOW_ID_PT", "123")
 
 
 settings = Settings()

@@ -23,22 +23,22 @@ TRUST_PROMPTS = {
     },
     "PT": {
         "intro": (
-            "Bem-vindo! Voce esta participando de um estudo sobre "
-            "confianca nas urnas eletronicas.\n\n"
-            "Antes de comecarmos, em uma escala de 1 a 10, quanto voce "
-            "confia no sistema eletronico de votacao do Brasil?\n\n"
-            "(1 = nenhuma confianca, 10 = confianca total)\n\n"
-            "Por favor, selecione sua avaliacao na lista abaixo."
+            "Bem-vindo! Você está participando de um estudo de pesquisa sobre a "
+            "confiança nas urnas eletrônicas.\n\n"
+            "Para começar, por favor, avalie seu nível atual de confiança usando "
+            "o botão 'Avaliar Agora' abaixo — não digite sua avaliação no chat."
         ),
-        "invalid": ("Por favor, use a lista abaixo para selecionar sua avaliacao."),
+        "invalid": (
+            "Por favor, use o botão 'Avaliar Agora' abaixo para enviar sua avaliação "
+            "— não conseguimos registrar notas enviadas por mensagens de texto."
+        ),
         "check_in": (
-            "Verificacao rapida: Em uma escala de 1 a 10, quanto voce "
-            "confia no sistema eletronico de votacao do Brasil agora?\n\n"
-            "(1 = nenhuma confianca, 10 = confianca total)\n\n"
-            "Por favor, selecione sua avaliacao na lista abaixo."
+            "Verificação rápida: seu nível de confiança mudou? "
+            "Use o botão 'Avaliar Agora' abaixo para atualizar sua pontuação."
         ),
         "rating_received": (
-            "Obrigado por compartilhar. Vamos continuar nossa conversa."
+            "Obrigado! Para começarmos, eu adoraria ouvir sua opinião — "
+            "o que vem à sua mente quando você pensa no sistema de votação eletrônica no Brasil?"
         ),
     },
 }
