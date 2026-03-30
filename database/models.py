@@ -27,8 +27,8 @@ class Conversation(pydantic.BaseModel):
     updated_at: datetime = pydantic.Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-    language: str = "en"
-    prompt_variant: str = "EN_prompt_A_control_condition"
+    language: str = "PT"
+    prompt_variant: str = "PT_prompt_A_control_condition"
 
     # metrics for tracking feelings
     conversation_phase: str = "awaiting_initial_rating"

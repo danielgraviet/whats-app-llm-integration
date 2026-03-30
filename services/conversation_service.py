@@ -22,7 +22,7 @@ async def handle_incoming_message(
 
     # 1. Get or create conversation (assign variant if new)
     base_variant = prompt_service.assign_variant()
-    language = "EN"
+    language = "PT"
     full_prompt_name = f"{language}_prompt_{base_variant}"
 
     conversation = firebase.get_or_create_conversation(
@@ -51,6 +51,18 @@ async def handle_incoming_message(
         else:
             return_msg = "Error deleting data. Contact Danny!"
         return BotResponse(text_messages=[return_msg])
+
+    lang_cmd = message_text.strip().lower()
+    if lang_cmd in ("/lang en", "/lang pt"):
+        new_lang = "EN" if lang_cmd == "/lang en" else "PT"
+        base = conversation.prompt_variant.split("_prompt_", 1)[1]
+        new_variant = f"{new_lang}_prompt_{base}"
+        firebase.update_language(client, phone_number, new_lang, new_variant)
+        confirm = {
+            "EN": "Language switched to English.",
+            "PT": "Idioma alterado para Português.",
+        }
+        return BotResponse(text_messages=[confirm[new_lang]])
 
     # 2. Route based on conversation phase
     phase = conversation.conversation_phase

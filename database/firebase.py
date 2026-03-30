@@ -207,6 +207,23 @@ def get_and_clear_pending_response(client, phone_number: str) -> str:
         return ""
 
 
+def update_language(client, phone_number: str, language: str, prompt_variant: str) -> bool:
+    """Updates the language and corresponding prompt variant for a conversation."""
+    try:
+        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref.update(
+            {
+                "language": language,
+                "prompt_variant": prompt_variant,
+                "updated_at": dt.datetime.now(),
+            }
+        )
+        return True
+    except Exception:
+        logger.exception("Error updating language for phone_number=%s", phone_number)
+        return False
+
+
 def delete_conversation(client, phone_number: str) -> bool:
     try:
         client.collection("conversations").document(phone_number).delete()
