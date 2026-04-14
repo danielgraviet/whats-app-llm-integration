@@ -103,7 +103,7 @@ async def send_flow_to_whatsapp(to_phone: str, body_text: str, language: str = "
                 "parameters": {
                     "flow_message_version": "3",
                     "flow_id": flow_id,
-                    "flow_cta": "Rate Now",
+                    "flow_cta": "Avaliar Agora" if language.upper() == "PT" else "Rate Now",
                     "flow_action": "navigate",
                     "flow_action_payload": {"screen": "QUESTION_ONE"},
                 },
