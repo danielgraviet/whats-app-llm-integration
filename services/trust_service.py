@@ -2,44 +2,16 @@ from config import settings
 
 TRUST_PROMPTS = {
     "EN": {
-        "intro": (
-            "Welcome! You are participating in a research study about "
-            "trust in electronic voting machines.\n\n"
-            "To get started, please rate your current level of trust using "
-            "the 'Rate Now' button below — do not type your rating in the chat."
-        ),
-        "invalid": (
-            "Please use the 'Rate Now' button below to submit your rating "
-            "— we're not able to record ratings sent as text messages."
-        ),
-        "check_in": (
-            "Quick check-in: has your level of trust changed at all? "
-            "Use the 'Rate Now' button below to update your score."
-        ),
-        "rating_received": (
-            "Thank you! To get us started, I'd love to hear your thoughts — "
-            "what comes to mind when you think about the electronic voting system in Brazil?"
-        ),
+        "intro": """Hi! You're about to have a conversation with an artificial intelligence about Brazilian elections. This conversation is part of an academic research project on how humans and AI can engage around complex topics. Before we start, please tap the button below to answer one quick question.""",
+        "invalid": """Please use the 'Rate Now' button below to submit your rating — we're not able to record ratings sent as text messages.""",
+        "check_in": """Quick check-in: has your level of trust changed at all? Use the 'Rate Now' button below to update your score.""",
+        "rating_received": """Thank you! To get us started, I'd love to hear your thoughts — what comes to mind when you think about the electronic voting system in Brazil?""",
     },
     "PT": {
-        "intro": (
-            "Bem-vindo! Você está participando de um estudo de pesquisa sobre a "
-            "confiança nas urnas eletrônicas.\n\n"
-            "Para começar, por favor, avalie seu nível atual de confiança usando "
-            "o botão 'Avaliar Agora' abaixo — não digite sua avaliação no chat."
-        ),
-        "invalid": (
-            "Por favor, use o botão 'Avaliar Agora' abaixo para enviar sua avaliação "
-            "— não conseguimos registrar notas enviadas por mensagens de texto."
-        ),
-        "check_in": (
-            "Verificação rápida: seu nível de confiança mudou? "
-            "Use o botão 'Avaliar Agora' abaixo para atualizar sua pontuação."
-        ),
-        "rating_received": (
-            "Obrigado! Para começarmos, eu adoraria ouvir sua opinião — "
-            "o que vem à sua mente quando você pensa no sistema de votação eletrônica no Brasil?"
-        ),
+        "intro": """Olá! Você vai participar de uma conversa com uma inteligência artificial sobre as eleições brasileiras. Essa conversa faz parte de uma pesquisa acadêmica sobre como humanos e IAs podem dialogar sobre temas complexos. Antes de começar, clique no botão abaixo para responder uma pergunta rápida.""",
+        "invalid": """Por favor, use o botão 'Avaliar Agora' abaixo para enviar sua avaliação — não conseguimos registrar notas enviadas por mensagens de texto.""",
+        "check_in": """Verificação rápida: seu nível de confiança mudou? Use o botão 'Avaliar Agora' abaixo para atualizar sua pontuação.""",
+        "rating_received": """Obrigado! Para começarmos, eu adoraria ouvir sua opinião — o que vem à sua mente quando você pensa no sistema de votação eletrônica no Brasil?""",
     },
 }
 

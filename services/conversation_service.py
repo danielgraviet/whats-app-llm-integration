@@ -67,12 +67,12 @@ async def handle_incoming_message(
     # 2. Route based on conversation phase
     phase = conversation.conversation_phase
 
-    if phase == "awaiting_initial_rating": # how is this being set? is this the default value? 
+    if phase == "awaiting_initial_rating":
         return await _handle_initial_rating(
             client, phone_number, message_text, conversation, msg_type
         )
 
-    elif phase == "awaiting_check_in_rating": # how is this being set?
+    elif phase == "awaiting_check_in_rating":
         return await _handle_check_in_rating(
             client, phone_number, message_text, conversation, msg_type
         )
