@@ -8,7 +8,15 @@ TRUST_PROMPTS = {
         "rating_received": """Thank you! To get us started, I'd love to hear your thoughts — what comes to mind when you think about the electronic voting system in Brazil?""",
     },
     "PT": {
-        "intro": """Olá! Você vai participar de uma conversa com uma inteligência artificial sobre as eleições brasileiras. Essa conversa faz parte de uma pesquisa acadêmica sobre como humanos e IAs podem dialogar sobre temas complexos. Antes de começar, clique no botão abaixo para responder uma pergunta rápida.""",
+        "intro": """Olá!
+
+Você vai participar de uma conversa com uma inteligência artificial sobre um tema relacionado às eleições brasileiras.
+
+Esta conversa faz parte de uma pesquisa acadêmica conduzida por pesquisadores da Universidade do Texas em Austin. O estudo foi aprovado pelo Comitê de Ética em Pesquisa da universidade.
+
+Sua participação é voluntária. Não coletamos informações que permitam identificar você, e suas respostas serão utilizadas de forma anônima exclusivamente para fins de pesquisa. Você pode encerrar a conversa a qualquer momento.
+
+Antes de começar, clique no botão abaixo para responder uma pergunta rápida.""",
         "invalid": """Por favor, use o botão 'Avaliar Agora' abaixo para enviar sua avaliação — não conseguimos registrar notas enviadas por mensagens de texto.""",
         "check_in": """Verificação rápida: seu nível de confiança mudou? Use o botão 'Avaliar Agora' abaixo para atualizar sua pontuação.""",
         "rating_received": """Obrigado! Para começarmos, eu adoraria ouvir sua opinião — o que vem à sua mente quando você pensa no sistema de votação eletrônica no Brasil?""",
