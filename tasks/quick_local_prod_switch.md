@@ -8,10 +8,14 @@
 
 ## Local Dev Credentials (phone ending in 5414)
 
-- **Access token:** [REMOVED-ACCESS-TOKEN]
-- **Phone number ID:** [REMOVED-PHONE-NUMBER-ID]
-- **WA Business Account ID:** [REMOVED-WABA-ID]
-- **Verify token:** [REMOVED-VERIFY-TOKEN]
+Credentials are **not** kept in this repo. They live in the gitignored file
+`.env.dev-meta-credentials` in the project root (ask a teammate for a copy).
+Copy its values into `.env.local`, which is loaded when `APP_ENV=local`.
+
+- **Access token:** see `.env.dev-meta-credentials`
+- **Phone number ID:** see `.env.dev-meta-credentials`
+- **WA Business Account ID:** see `.env.dev-meta-credentials`
+- **Verify token:** see `.env.dev-meta-credentials`
 - **Env file:** `.env.local` (loaded when `APP_ENV=local`)
 
 ## Production Credentials (phone ending in 4260)
