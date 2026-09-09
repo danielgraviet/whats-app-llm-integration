@@ -28,10 +28,20 @@ firestore_client = firebase_db.init_firestore()
 _WA_HEADERS = {"Authorization": f"Bearer {settings.ACCESS_TOKEN}"}
 
 
-async def process_whatsapp_ai(phone_number: str, message_text: str, msg_type: str):
+async def process_whatsapp_ai(
+    phone_number: str,
+    message_text: str,
+    msg_type: str,
+    raw_message: dict | None = None,
+    contacts: list | None = None,
+):
     """Process incoming WhatsApp message and send AI response.
 
     Runs as a background task after the webhook response is sent.
+
+    raw_message is the untouched message dict from Meta's webhook payload and
+    contacts is the sibling "contacts" array. Both are persisted for research
+    metadata (ad referral, click id, profile name, message id, timestamp).
     """
     try:
         # intercept voice messages first.
@@ -41,7 +51,12 @@ async def process_whatsapp_ai(phone_number: str, message_text: str, msg_type: st
             msg_type = "text"
 
         bot_response = await conversation_service.handle_incoming_message(
-            firestore_client, phone_number, message_text, msg_type
+            firestore_client,
+            phone_number,
+            message_text,
+            msg_type,
+            raw_message=raw_message,
+            contacts=contacts,
         )
 
         for text in bot_response.text_messages:
@@ -155,7 +170,10 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                         and "messages" in value
                         and incoming_phone_id == str(settings.PHONE_NUMBER_ID)
                     ):
-                        messages_to_process.extend(value["messages"])
+                        contacts = value.get("contacts", [])
+                        messages_to_process.extend(
+                            (m, contacts) for m in value["messages"]
+                        )
 
         # Handle direct value payload (field + value structure)
         elif data.get("field") == "messages" and "value" in data:
@@ -163,17 +181,29 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
             metadata = value.get("metadata", {})
             incoming_phone_id = str(metadata.get("phone_number_id", ""))
             if "messages" in value and incoming_phone_id == str(settings.PHONE_NUMBER_ID):
-                messages_to_process.extend(value["messages"])
+                contacts = value.get("contacts", [])
+                messages_to_process.extend(
+                    (m, contacts) for m in value["messages"]
+                )
 
-        # Process each text message
-        for message in messages_to_process:
+        # Process each message
+        for message, contacts in messages_to_process:
             sender = message.get("from")
             msg_type = message.get("type")
+
+            if "referral" in message:
+                logger.info(
+                    "Ad referral received from=%s referral=%s",
+                    sender,
+                    json.dumps(message["referral"]),
+                )
 
             # handles normal texts
             if msg_type == "text" and "text" in message:
                 text = message["text"]["body"]
-                background_tasks.add_task(process_whatsapp_ai, sender, text, msg_type)
+                background_tasks.add_task(
+                    process_whatsapp_ai, sender, text, msg_type, message, contacts
+                )
 
             # handles flows
             elif msg_type == "interactive" and "interactive" in message:
@@ -186,13 +216,20 @@ async def handle_webhook(request: Request, background_tasks: BackgroundTasks):
                     rating_value = response_json.get("confidence_rating", "")
                     reply_id = f"rating_{rating_value}"
                     background_tasks.add_task(
-                        process_whatsapp_ai, sender, reply_id, msg_type
+                        process_whatsapp_ai,
+                        sender,
+                        reply_id,
+                        msg_type,
+                        message,
+                        contacts,
                     )
 
             # handles voice messages
             elif msg_type == "audio" and "audio" in message:
                 media_id = message["audio"]["id"]
-                background_tasks.add_task(process_whatsapp_ai, sender, media_id, msg_type)
+                background_tasks.add_task(
+                    process_whatsapp_ai, sender, media_id, msg_type, message, contacts
+                )
 
         return {"status": "accepted"}
 

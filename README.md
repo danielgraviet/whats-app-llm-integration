@@ -250,9 +250,40 @@ Receives incoming WhatsApp messages (text and interactive replies) from Meta's w
     "conversation_phase": "normal",
     "feeling_array": [TrustRating, ...],
     "user_turn_count": 5,
-    "intro_sent": true
+    "intro_sent": true,
+    "first_message_raw": { ...complete Meta message dict from the first message... },
+    "first_contacts_raw": [ { "profile": { "name": "..." }, "wa_id": "..." } ],
+    "referrals": [
+        {
+            "message_id": "wamid....",
+            "message_timestamp": "1700000000",
+            "referral": {
+                "source_type": "ad",
+                "source_id": "<AD_ID>",
+                "source_url": "...",
+                "ctwa_clid": "<CLICK_ID>",
+                "headline": "...",
+                "body": "..."
+            }
+        }
+    ]
 }
 ```
+
+### Raw Webhook Metadata (ad attribution)
+
+Every incoming message is passed through to Firestore untouched so that nothing
+Meta sends is lost. Three fields on the conversation document hold it:
+
+| Field | When written | Contents |
+|-------|--------------|----------|
+| `first_message_raw` | Once, on the participant's first message | The complete message dict as received from the webhook. For Click-to-WhatsApp ad arrivals this includes the `referral` object (ad id, click id, creative). |
+| `first_contacts_raw` | Once, alongside the above | The `contacts` array from the same webhook payload (WhatsApp profile name and `wa_id`). |
+| `referrals` | Every time a message carries a `referral` object | Appended list of `{message_id, message_timestamp, referral}` so a second ad click is recorded without overwriting the first touch. |
+
+Condition assignment is random and deliberately independent of any ad data.
+Capture is best-effort: a failure to write metadata is logged and never blocks
+the conversation.
 
 ### TrustRating
 

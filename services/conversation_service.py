@@ -7,6 +7,21 @@ from services import prompt_service, trust_service
 _N_HISTORY_TURNS = 5
 
 
+def _initial_belief_level(conversation) -> int | None:
+    """The participant's first trust rating (collected before the conversation).
+
+    Prefers the rating recorded at message_index 0; falls back to the earliest
+    rating in the array; None if no rating has been collected yet.
+    """
+    ratings = conversation.feeling_array
+    if not ratings:
+        return None
+    for r in ratings:
+        if r.message_index == 0:
+            return r.score
+    return ratings[0].score
+
+
 @dataclasses.dataclass
 class BotResponse:
     text_messages: list[str] = dataclasses.field(default_factory=list)
@@ -16,9 +31,19 @@ class BotResponse:
 
 
 async def handle_incoming_message(
-    client, phone_number: str, message_text: str, msg_type: str
+    client,
+    phone_number: str,
+    message_text: str,
+    msg_type: str,
+    raw_message: dict | None = None,
+    contacts: list | None = None,
 ) -> BotResponse:
-    """Main entry point. Routes to the correct handler based on conversation phase."""
+    """Main entry point. Routes to the correct handler based on conversation phase.
+
+    raw_message / contacts are the untouched webhook objects from Meta. They are
+    stored on the conversation for research metadata (see firebase.record_metadata).
+    Condition assignment is random and independent of any ad referral by design.
+    """
 
     # 1. Get or create conversation (assign variant if new)
     base_variant = prompt_service.assign_variant()
@@ -29,17 +54,30 @@ async def handle_incoming_message(
         client, phone_number, language=language, variant=full_prompt_name
     )
 
+    # 2. Persist raw webhook metadata (first-touch raw message, contact profile,
+    #    and every ad referral ever seen for this number).
+    if raw_message is not None:
+        firebase.record_metadata(
+            client, phone_number, conversation, raw_message, contacts or []
+        )
+
     # Dev commands — bypass all state logic
     if message_text.strip().lower() == "/info":
+        belief = _initial_belief_level(conversation)
         system_prompt = prompt_service.get_prompt(
-            language=conversation.language, variant=conversation.prompt_variant
+            language=conversation.language,
+            variant=conversation.prompt_variant,
+            user_belief_level=belief,
         )
         info_text = (
             f"[Dev Info]\n"
             f"Variant: {conversation.prompt_variant}\n"
+            f"Initial belief level: {belief}\n"
             f"Phase: {conversation.conversation_phase}\n"
             f"Turn count: {conversation.user_turn_count}\n"
-            f"Ratings: {len(conversation.feeling_array)}\n\n"
+            f"Ratings: {len(conversation.feeling_array)}\n"
+            f"Ad referrals: {len(conversation.referrals)}\n"
+            f"First-message raw captured: {bool(conversation.first_message_raw)}\n\n"
             f"--- System Prompt ---\n{system_prompt}"
         )
         return BotResponse(text_messages=[info_text])
@@ -64,7 +102,7 @@ async def handle_incoming_message(
         }
         return BotResponse(text_messages=[confirm[new_lang]])
 
-    # 2. Route based on conversation phase
+    # 3. Route based on conversation phase
     phase = conversation.conversation_phase
 
     if phase == "awaiting_initial_rating":
@@ -161,7 +199,9 @@ async def _handle_normal_message(
     new_turn_count = conversation.user_turn_count + 1
 
     system_prompt = prompt_service.get_prompt(
-        language=conversation.language, variant=conversation.prompt_variant
+        language=conversation.language,
+        variant=conversation.prompt_variant,
+        user_belief_level=_initial_belief_level(conversation),
     )
 
     recent_history = conversation.history[-(_N_HISTORY_TURNS * 2) :]

@@ -207,6 +207,56 @@ def get_and_clear_pending_response(client, phone_number: str) -> str:
         return ""
 
 
+def record_metadata(
+    client,
+    phone_number: str,
+    conversation: models.Conversation,
+    raw_message: dict,
+    contacts: list,
+) -> bool:
+    """Persists raw webhook metadata on the conversation document.
+
+    - On the first message ever seen from this number, stores the complete
+      raw message dict and the contacts array (first-touch rule).
+    - Whenever a message carries a "referral" object (Click-to-WhatsApp ad
+      attribution), appends it to the referrals array along with the message
+      id and Meta timestamp so repeat ad clicks are all retained.
+
+    Never raises; metadata capture must not block the conversation.
+    """
+    try:
+        update: dict = {}
+
+        if not conversation.first_message_raw:
+            update["first_message_raw"] = raw_message
+            update["first_contacts_raw"] = contacts
+            conversation.first_message_raw = raw_message
+            conversation.first_contacts_raw = contacts
+
+        referral = raw_message.get("referral")
+        if referral:
+            record = {
+                "message_id": raw_message.get("id"),
+                "message_timestamp": raw_message.get("timestamp"),
+                "referral": referral,
+            }
+            update["referrals"] = firestore.ArrayUnion([record])
+            if record not in conversation.referrals:
+                conversation.referrals.append(record)
+
+        if not update:
+            return True
+
+        update["updated_at"] = dt.datetime.now()
+        client.collection("conversations").document(phone_number).set(
+            update, merge=True
+        )
+        return True
+    except Exception:
+        logger.exception("Error recording metadata for phone_number=%s", phone_number)
+        return False
+
+
 def update_language(client, phone_number: str, language: str, prompt_variant: str) -> bool:
     """Updates the language and corresponding prompt variant for a conversation."""
     try:
