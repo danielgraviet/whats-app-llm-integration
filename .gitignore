@@ -1,5 +1,6 @@
 .env
 .env.*
+!.env.schema
 *.json
 !package.json
 __pycache__/
