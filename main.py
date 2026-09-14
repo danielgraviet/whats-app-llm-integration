@@ -257,4 +257,8 @@ def verify_whatsapp(
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "version": settings.GIT_COMMIT_SHA or "unknown",
+        "debrief_after_turns": settings.DEBRIEF_AFTER_TURNS,
+    }

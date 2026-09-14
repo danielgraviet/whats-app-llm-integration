@@ -155,6 +155,20 @@ def update_conversation_phase(
         return False
 
 
+def mark_debriefed(client, phone_number: str) -> bool:
+    """Moves the conversation to the terminal 'ended' phase and stamps the time."""
+    try:
+        doc_ref = client.collection("conversations").document(phone_number)
+        now = dt.datetime.now()
+        doc_ref.update(
+            {"conversation_phase": "ended", "debriefed_at": now, "updated_at": now}
+        )
+        return True
+    except Exception:
+        logger.exception("Error marking debriefed for phone_number=%s", phone_number)
+        return False
+
+
 def update_intro_sent(client, phone_number: str) -> bool:
     """Marks the intro as sent for this conversation."""
     try:

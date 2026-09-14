@@ -1,5 +1,6 @@
 import dataclasses
 
+from config import settings
 from database import firebase
 from integrations import openai_client
 from services import prompt_service, trust_service
@@ -74,7 +75,8 @@ async def handle_incoming_message(
             f"Variant: {conversation.prompt_variant}\n"
             f"Initial belief level: {belief}\n"
             f"Phase: {conversation.conversation_phase}\n"
-            f"Turn count: {conversation.user_turn_count}\n"
+            f"Turn count: {conversation.user_turn_count} "
+            f"(debrief after {settings.DEBRIEF_AFTER_TURNS})\n"
             f"Ratings: {len(conversation.feeling_array)}\n"
             f"Ad referrals: {len(conversation.referrals)}\n"
             f"First-message raw captured: {bool(conversation.first_message_raw)}\n\n"
@@ -113,6 +115,16 @@ async def handle_incoming_message(
     elif phase == "awaiting_check_in_rating":
         return await _handle_check_in_rating(
             client, phone_number, message_text, conversation, msg_type
+        )
+
+    elif phase == "ended":
+        # Study is over for this participant: no LLM call, just a short note.
+        return BotResponse(
+            text_messages=[
+                trust_service.get_trust_prompt(
+                    conversation.language, "conversation_ended"
+                )
+            ]
         )
 
     else:  # "normal" or unknown fallback
@@ -182,11 +194,19 @@ async def _handle_check_in_rating(
     firebase.save_trust_rating(
         client, phone_number, score, message_index=conversation.user_turn_count
     )
-    firebase.update_conversation_phase(client, phone_number, "normal")
-    pending = firebase.get_and_clear_pending_response(client, phone_number) # is this stored in memory? could there be an issue with multiple users, or horizontal scaling and getting routed.
+    pending = firebase.get_and_clear_pending_response(client, phone_number)
     messages = []  # can add a potential, "thanks for answering"
     if pending:
         messages.append(pending)
+
+    # If the debrief turn landed on a check-in turn, the check-in ran first so
+    # the final rating is collected; now deliver the held reply and the debrief.
+    if trust_service.should_debrief(conversation.user_turn_count):
+        firebase.mark_debriefed(client, phone_number)
+        messages.append(trust_service.get_trust_prompt(lang, "debrief"))
+        return BotResponse(text_messages=messages)
+
+    firebase.update_conversation_phase(client, phone_number, "normal")
     return BotResponse(text_messages=messages)
 
 
@@ -227,6 +247,20 @@ async def _handle_normal_message(
             send_trust_flow=True,
             trust_flow_language=conversation.language,
             trust_flow_prompt_key="check_in",
+        )
+
+    # Debrief turn: answer the participant's message, then send the debrief
+    # and end the conversation.
+    if trust_service.should_debrief(new_turn_count):
+        firebase.update_conversation_phase(
+            client, phone_number, "normal", user_turn_count=new_turn_count
+        )
+        firebase.mark_debriefed(client, phone_number)
+        return BotResponse(
+            text_messages=[
+                ai_response,
+                trust_service.get_trust_prompt(conversation.language, "debrief"),
+            ]
         )
 
     # No check-in — just the AI response

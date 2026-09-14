@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pydantic
 
@@ -31,7 +31,9 @@ class Conversation(pydantic.BaseModel):
     prompt_variant: str = "PT_prompt_A_control_condition"
 
     # metrics for tracking feelings
+    # phases: awaiting_initial_rating -> normal <-> awaiting_check_in_rating -> ended
     conversation_phase: str = "awaiting_initial_rating"
+    debriefed_at: Optional[datetime] = None
     feeling_array: List[TrustRating] = []
     user_turn_count: int = 0
     intro_sent: bool = False

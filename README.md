@@ -79,7 +79,28 @@ awaiting_initial_rating ──(user selects rating)──► normal
                                                      │
                                                      ▼
                                                    normal
+                                                     │
+                                     (after DEBRIEF_AFTER_TURNS user messages)
+                                                     │
+                                                     ▼
+                                                   ended
 ```
+
+### Debriefing and Conversation End
+
+After the participant has sent `DEBRIEF_AFTER_TURNS` messages in the normal
+phase (default 8; the intro and rating replies are not counted), the bot
+answers that final message as usual, then sends the debriefing text in the
+conversation's language and moves the conversation to the `ended` phase.
+`debriefed_at` is stamped on the document. If the debrief turn is also a
+check-in turn, the check-in runs first so the final trust rating is collected,
+and the debrief is sent right after the rating is received.
+
+In the `ended` phase the LLM is no longer called. Any further message gets a
+short "this conversation has ended" reply with the study contact email.
+
+The debrief and ended texts live in `TRUST_PROMPTS` in
+`services/trust_service.py` under the keys `debrief` and `conversation_ended`.
 
 ### Interactive List Payload
 
@@ -193,6 +214,7 @@ WHATSAPP_BUSINESS_ACC_ID=your_business_account_id
 ACCESS_TOKEN="your_meta_access_token"
 OPENAI_API_KEY="your_openai_api_key"
 TRUST_CHECK_INTERVAL=3
+DEBRIEF_AFTER_TURNS=8
 ```
 
 ### 5. Configure Webhook
@@ -210,7 +232,7 @@ Send these as WhatsApp messages to trigger dev actions:
 
 | Command | Action |
 |---------|--------|
-| `/info` | Returns current variant, phase, turn count, ratings, and system prompt |
+| `/info` | Returns current variant, phase, turn count and debrief threshold, belief level, ratings, referral capture status, and system prompt |
 | `/reset` | Deletes user conversation data from Firestore |
 
 ## API Endpoints
@@ -233,7 +255,11 @@ Receives incoming WhatsApp messages (text and interactive replies) from Meta's w
 
 ### `GET /health` - Health Check
 
-**Response:** `{"status": "healthy"}`
+**Response:** `{"status": "healthy", "version": "<git sha>", "debrief_after_turns": 8}`
+
+`version` is the deployed commit, read from `RAILWAY_GIT_COMMIT_SHA` (set
+automatically by Railway) or `GIT_COMMIT_SHA`; it reads `unknown` locally.
+Use it to confirm a deploy has cut over.
 
 ## Data Models
 
@@ -248,6 +274,7 @@ Receives incoming WhatsApp messages (text and interactive replies) from Meta's w
     "language": "EN",
     "prompt_variant": "EN_prompt_A_control_condition",
     "conversation_phase": "normal",
+    "debriefed_at": null,
     "feeling_array": [TrustRating, ...],
     "user_turn_count": 5,
     "intro_sent": true,
