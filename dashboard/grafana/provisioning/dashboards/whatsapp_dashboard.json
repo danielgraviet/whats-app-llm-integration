@@ -11,7 +11,7 @@
   "graphTooltip": 1,
   "refresh": "30s",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "time": {
     "from": "now-24h",
     "to": "now"
@@ -45,28 +45,7 @@
     ]
   },
   "templating": {
-    "list": [
-      {
-        "type": "textbox",
-        "name": "abandon_hours",
-        "label": "Abandon after (hours)",
-        "description": "A conversation that is not ended and has been silent this long counts as abandoned.",
-        "query": "24",
-        "current": {
-          "selected": false,
-          "text": "24",
-          "value": "24"
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "24",
-            "value": "24"
-          }
-        ],
-        "hide": 0
-      }
-    ]
+    "list": []
   },
   "panels": [
     {
@@ -603,7 +582,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'in progress'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'in progress'\n",
           "refId": "A"
         }
       ],
@@ -670,7 +649,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
           "refId": "A"
         }
       ],
@@ -737,7 +716,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'never rated'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'never rated'\n",
           "refId": "A"
         }
       ],
@@ -940,7 +919,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(user_turn_count) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
+          "rawSql": "SELECT avg(user_turn_count) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
           "refId": "A"
         }
       ],
@@ -1076,7 +1055,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(extract(epoch FROM (last_activity_at - started_at)) / 60.0) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned' AND started_at IS NOT NULL\n",
+          "rawSql": "SELECT avg(extract(epoch FROM (last_activity_at - started_at)) / 60.0) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned' AND started_at IS NOT NULL\n",
           "refId": "A"
         }
       ],
@@ -1448,7 +1427,7 @@
       "id": 24,
       "type": "piechart",
       "title": "Outcome",
-      "description": "Abandoned = not ended and silent for more than $abandon_hours hours. Never rated = dropped before the initial trust rating.",
+      "description": "Abandoned = not ended and silent for longer than abandon_after() in the database (default 24 h; change it with CREATE OR REPLACE FUNCTION, see dashboard/README.md). Never rated = dropped before the initial trust rating.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "wa-timescale"
@@ -1468,7 +1447,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
+          "rawSql": "SELECT CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
           "refId": "A"
         }
       ],
@@ -2052,7 +2031,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  phone_hash AS participant,\n  variant,\n  language,\n  phase,\n  CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - make_interval(hours => $abandon_hours) THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome,\n  user_turn_count AS turns,\n  initial_rating AS \"initial rating\",\n  latest_rating AS \"latest rating\",\n  ad_source_id AS \"ad id\",\n  started_at,\n  last_activity_at,\n  debriefed_at\nFROM wa_conversations\nWHERE $__timeFilter(last_activity_at)\nORDER BY last_activity_at DESC\nLIMIT 200\n",
+          "rawSql": "SELECT\n  phone_hash AS participant,\n  variant,\n  language,\n  phase,\n  CASE\n      WHEN phase = 'ended' THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome,\n  user_turn_count AS turns,\n  initial_rating AS \"initial rating\",\n  latest_rating AS \"latest rating\",\n  ad_source_id AS \"ad id\",\n  started_at,\n  last_activity_at,\n  debriefed_at\nFROM wa_conversations\nWHERE $__timeFilter(last_activity_at)\nORDER BY last_activity_at DESC\nLIMIT 200\n",
           "refId": "A"
         }
       ],

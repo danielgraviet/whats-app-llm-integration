@@ -18,7 +18,9 @@ services:
     environment:
       POSTGRES_PASSWORD: ${PG_PASSWORD:-password}
     ports:
-      - "${PG_PORT:-5432}:5432"
+      # Bound to localhost on purpose: on a server with a public IP, "5432:5432"
+      # would expose Postgres (default password!) to the whole internet.
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
     volumes:
       - wa-timescale-data:/var/lib/postgresql/data
       # runs once on first start of an empty volume; re-run manually otherwise

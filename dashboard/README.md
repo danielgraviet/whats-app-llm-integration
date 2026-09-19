@@ -135,7 +135,39 @@ several definitions so you can choose in Grafana:
 - **active (5 min)**: not ended, and the conversation document was updated in the last 5 minutes. Someone is effectively typing.
 - **active (30 min)**: same with a 30-minute window. A session in progress with slow replies.
 - **awaiting rating**: blocked on a trust-rating reply (initial or check-in).
-- **Outcome** (pie and stats): `completed` = debriefed; `never rated` = dropped before the first rating; `abandoned` = not ended and silent longer than the `Abandon after (hours)` dashboard variable (default 24); otherwise `in progress`.
+- **Outcome** (pie and stats): `completed` = debriefed; `never rated` = dropped before the first rating; `abandoned` = not ended and silent longer than `abandon_after()` (default 24 hours); otherwise `in progress`.
+
+The abandon threshold is a tiny SQL function rather than a Grafana variable,
+because shared/public dashboards cannot use template variables. To change it:
+
+```sql
+CREATE OR REPLACE FUNCTION abandon_after() RETURNS interval
+    LANGUAGE sql IMMUTABLE AS $$ SELECT interval '48 hours' $$;
+```
+
+## Sharing the dashboard
+
+Grafana's **Share > Share externally** (a "public dashboard") gives a link
+that works without a login. Limitations that matter here:
+
+- Template variables are not interpolated, which is why the dashboard has none.
+- The time range picker is off unless you enable it in the share settings.
+- Viewers see data only; nothing is editable.
+
+If colleagues need to edit or explore, create Viewer accounts instead
+(Administration > Users) and keep the public link for read-only sharing.
+
+## Running on a server (e.g. a DigitalOcean droplet)
+
+- Postgres is bound to `127.0.0.1` in `docker-compose.yml`. Do not change that
+  to `0.0.0.0` on a machine with a public IP: the default password would be
+  open to the internet.
+- Change the Grafana admin password on first login, and put Grafana behind
+  HTTPS (Caddy or nginx with Let's Encrypt) before sharing links widely.
+- After pulling a new version: `docker compose up -d` picks up compose changes,
+  provisioning re-reads the dashboard JSON within about 10 seconds, and any
+  new SQL objects need `psql ... -f dashboard/schema.sql` once (safe to re-run).
+
 
 Reply latency is not shown: the app stamps both the user message and the reply
 when it saves them after the LLM returns, so their timestamps are nearly

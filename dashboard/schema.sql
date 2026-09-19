@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS rt_metrics (
 );
 SELECT create_hypertable('rt_metrics', by_range('logged_at'), if_not_exists => TRUE);
 
+-- Dashboard setting: how long a conversation may be silent before it counts
+-- as abandoned. Kept in the database (not as a Grafana variable) so that
+-- public/shared dashboards, which cannot use template variables, still work.
+-- To change it, re-run this statement with a different interval.
+CREATE OR REPLACE FUNCTION abandon_after() RETURNS interval
+    LANGUAGE sql IMMUTABLE AS $$ SELECT interval '24 hours' $$;
+
 -- Poller bookkeeping (Firestore updated_at watermark).
 CREATE TABLE IF NOT EXISTS poller_state (
     key    TEXT PRIMARY KEY,
