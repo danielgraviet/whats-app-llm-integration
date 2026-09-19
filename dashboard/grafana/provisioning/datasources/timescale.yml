@@ -1,0 +1,17 @@
+apiVersion: 1
+datasources:
+  - name: WhatsApp TimescaleDB
+    uid: wa-timescale            # whatsapp_dashboard.json references this uid
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: timescaledb:5432        # container name on the compose network
+    user: postgres
+    secureJsonData:
+      password: ${PG_PASSWORD}
+    jsonData:
+      database: postgres
+      sslmode: disable
+      timescaledb: true
+      postgresVersion: 1700
+    isDefault: true
+    editable: true

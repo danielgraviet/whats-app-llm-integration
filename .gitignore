@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.schema
+!dashboard/.env.schema
 *.json
 !package.json
 __pycache__/
@@ -9,3 +10,6 @@ testing.log
 .DS_Store
 .dmux-hooks/
 .dmux/
+
+# Grafana dashboard definitions are source, not credentials
+!dashboard/grafana/provisioning/dashboards/*.json

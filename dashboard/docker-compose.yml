@@ -1,0 +1,49 @@
+# TimescaleDB + Grafana for the WhatsApp study dashboard.
+#
+#   cd dashboard
+#   docker compose up -d           # start both (data persists in named volumes)
+#   docker compose down            # stop; add -v to also delete the data
+#
+# Grafana:  http://localhost:${GRAFANA_PORT:-3000}   (admin / admin on first login)
+# Postgres: postgresql://postgres:${PG_PASSWORD:-password}@localhost:${PG_PORT:-5432}/postgres
+#
+# The datasource and the dashboard are provisioned automatically from
+# ./grafana/provisioning, so nothing needs to be clicked through in the UI.
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    container_name: wa-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-password}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - wa-timescale-data:/var/lib/postgresql/data
+      # runs once on first start of an empty volume; re-run manually otherwise
+      - ./schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana-enterprise:latest
+    container_name: wa-grafana
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      PG_PASSWORD: ${PG_PASSWORD:-password}
+    volumes:
+      - wa-grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  wa-timescale-data:
+  wa-grafana-data:
