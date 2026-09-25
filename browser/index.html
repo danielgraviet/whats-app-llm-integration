@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Study – Conversation Browser</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #fff; --line: #e1e4e8; --text: #1f2328; --muted: #6a737d;
+    --accent: #0b6bcb; --user: #dcf8c6; --bot: #fff; --hl: #fff3a0;
+    --ok: #1a7f37; --warn: #b26a00; --bad: #b42318; --info: #6639ba;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .status { color: var(--muted); font-size: 12px; margin-left: auto; }
+  header .status b { color: var(--text); }
+  #layout { display: grid; grid-template-columns: 420px 1fr; height: calc(100% - 45px); }
+  #left { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-width: 0; }
+  #controls { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+  #controls input[type=search] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  select, button { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 13px; color: var(--text); }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); } button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .count { color: var(--muted); font-size: 12px; margin-left: auto; }
+  #list { overflow-y: auto; flex: 1; }
+  .item { padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .item:hover { background: #f6f8fa; } .item.active { background: #e8f1fb; border-left: 3px solid var(--accent); padding-left: 9px; }
+  .item .top { display: flex; gap: 6px; align-items: center; }
+  .item .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .item .meta { color: var(--muted); font-size: 12px; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .item .snippet { font-size: 12px; margin-top: 4px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #eee; color: #444; }
+  .pill.v { background: #e7e3ff; color: var(--info); }
+  .pill.completed { background: #dafbe1; color: var(--ok); } .pill.abandoned { background: #ffebe9; color: var(--bad); }
+  .pill.in-progress { background: #fff1d6; color: var(--warn); } .pill.never-rated { background: #eee; color: #555; }
+  .delta.up { color: var(--ok); } .delta.down { color: var(--bad); } .delta.flat { color: var(--muted); }
+  #right { overflow-y: auto; padding: 16px 20px; min-width: 0; }
+  #empty { color: var(--muted); margin-top: 40px; text-align: center; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .spacer { flex: 1; }
+  .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 18px; font-size: 13px; }
+  .kv div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted var(--line); padding: 2px 0; }
+  .kv span:first-child { color: var(--muted); } .kv span:last-child { font-family: ui-monospace, Menlo, monospace; font-size: 12px; text-align: right; word-break: break-all; }
+  .ratings { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .ratings table { border-collapse: collapse; font-size: 13px; } .ratings td, .ratings th { padding: 3px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+  .ratings th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .chat { display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 78%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); white-space: pre-wrap; word-wrap: break-word; position: relative; }
+  .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 2px; }
+  .msg.assistant { align-self: flex-start; background: var(--bot); border-bottom-left-radius: 2px; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; }
+  .msg .who .n { font-family: ui-monospace, Menlo, monospace; }
+  .msg .en { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #bbb; color: #333; font-style: italic; }
+  .msg.en-only .orig { display: none; } .msg.en-only .en { border-top: 0; margin-top: 0; padding-top: 0; font-style: normal; }
+  mark { background: var(--hl); padding: 0 1px; }
+  details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+  pre { background: #f6f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; }
+  .toast { position: fixed; bottom: 16px; right: 16px; background: #222; color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .spark { vertical-align: middle; }
+  @media (max-width: 900px) { #layout { grid-template-columns: 1fr; grid-template-rows: 45% 55%; } #left { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>WhatsApp Study · Conversation Browser</h1>
+  <span class="status" id="status">loading…</span>
+</header>
+<div id="layout">
+  <div id="left">
+    <div id="controls">
+      <input type="search" id="q" placeholder="Search transcripts (accent-insensitive, all words must match)…" autocomplete="off">
+      <div class="row">
+        <label>Sort <select id="sort">
+          <option value="started_at">Started</option>
+          <option value="last_activity_at">Last activity</option>
+          <option value="user_turn_count">Turns</option>
+          <option value="n_messages">Messages</option>
+          <option value="n_chars">Length (chars)</option>
+          <option value="user_chars">User text length</option>
+          <option value="duration_min">Duration</option>
+          <option value="rating_change">Rating change</option>
+          <option value="initial_rating">Initial rating</option>
+          <option value="latest_rating">Latest rating</option>
+          <option value="n_ratings">Ratings collected</option>
+        </select></label>
+        <button id="order" title="toggle ascending / descending">↓ desc</button>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="row">
+        <select id="f_outcome"><option value="">any outcome</option></select>
+        <select id="f_variant"><option value="">any variant</option></select>
+        <select id="f_phase"><option value="">any phase</option></select>
+        <select id="f_language"><option value="">any language</option></select>
+        <button id="clear" title="clear search and filters">clear</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </div>
+  <div id="right"><div id="empty">Select a conversation on the left.<br><br>Tip: the URL updates with the selected conversation, so links can be shared with colleagues who have access.</div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "–";
+  const ago = (iso) => { if (!iso) return "–"; const s = (Date.now() - new Date(iso)) / 1000; if (s < 60) return "just now";
+    const m = s / 60; if (m < 60) return `${Math.round(m)} min ago`; const h = m / 60; if (h < 48) return `${Math.round(h)} h ago`; return `${Math.round(h / 24)} d ago`; };
+  const norm = (s) => (s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+  const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2500); };
+
+  const state = { all: [], q: "", sort: "started_at", desc: true, filters: { outcome: "", variant: "", phase: "", language: "" },
+                  selected: null, detail: null, translations: new Map(), showEn: "off", status: null };
+
+  async function api(path, opts) {
+    const r = await fetch(path, opts);
+    if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(`${r.status} ${m}`); }
+    return r.json();
+  }
+
+  // ---------- list ----------
+  async function loadList() {
+    const data = await api(`/api/conversations?q=${encodeURIComponent(state.q)}`);
+    state.all = data.conversations;
+    fillFilterOptions();
+    renderList();
+  }
+  function fillFilterOptions() {
+    for (const [key, sel] of [["outcome", "#f_outcome"], ["variant", "#f_variant"], ["phase", "#f_phase"], ["language", "#f_language"]]) {
+      const s = $(sel); const cur = s.value;
+      const vals = [...new Set(state.all.map((c) => c[key]).filter((v) => v != null))].sort();
+      s.innerHTML = `<option value="">any ${key}</option>` + vals.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+      s.value = vals.includes(cur) ? cur : "";
+      state.filters[key] = s.value;
+    }
+  }
+  function visible() {
+    let rows = state.all.filter((c) => Object.entries(state.filters).every(([k, v]) => !v || c[k] === v));
+    const k = state.sort;
+    rows.sort((a, b) => {
+      const av = a[k], bv = b[k];
+      if (av == null && bv == null) return 0; if (av == null) return 1; if (bv == null) return -1;   // nulls last either way
+      const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+      return state.desc ? -cmp : cmp;
+    });
+    return rows;
+  }
+  function deltaSpan(c) {
+    if (c.initial_rating == null) return el("span", "delta flat", "no rating");
+    const s = el("span"); s.append(`${c.initial_rating}`);
+    if (c.latest_rating != null && c.n_ratings > 1) {
+      const d = c.rating_change; const cls = d > 0 ? "up" : d < 0 ? "down" : "flat";
+      s.append(` → ${c.latest_rating} `); s.append(el("span", `delta ${cls}`, `(${d > 0 ? "+" : ""}${d})`));
+    }
+    return s;
+  }
+  function renderList() {
+    const rows = visible(); const list = $("#list"); list.innerHTML = "";
+    $("#count").textContent = `${rows.length} of ${state.all.length}${state.q ? " matching" : ""}`;
+    for (const c of rows) {
+      const it = el("div", "item" + (c.id === state.selected ? " active" : "")); it.dataset.id = c.id;
+      const top = el("div", "top");
+      top.append(el("span", "id", c.id), el("span", "pill v", (c.variant || "?").split("_")[0]), el("span", `pill ${c.outcome.replace(" ", "-")}`, c.outcome));
+      if (c.language && c.language !== "PT") top.append(el("span", "pill", c.language));
+      it.append(top);
+      const meta = el("div", "meta");
+      meta.append(el("span", null, `${c.user_turn_count} turns`), el("span", null, `${c.n_chars} chars`),
+                  el("span", null, c.duration_min != null ? `${c.duration_min} min` : "–"), deltaSpan(c), el("span", null, ago(c.started_at)));
+      it.append(meta);
+      if (c.snippet) it.append(el("div", "snippet", c.snippet));
+      it.addEventListener("click", () => select(c.id));
+      list.append(it);
+    }
+  }
+
+  // ---------- detail ----------
+  async function select(id, pushHash = true) {
+    state.selected = id; state.showEn = "off";
+    if (pushHash) history.replaceState(null, "", `#${id}`);
+    document.querySelectorAll(".item").forEach((n) => n.classList.toggle("active", n.dataset.id === id));
+    try { state.detail = await api(`/api/conversations/${encodeURIComponent(id)}`); } catch (e) { toast(e.message); return; }
+    renderDetail();
+  }
+  const KV_ORDER = ["id", "phone", "profile_name", "variant", "prompt_variant", "language", "phase", "outcome", "intro_sent", "started_at", "last_activity_at", "debriefed_at",
+                    "duration_min", "user_turn_count", "n_messages", "n_chars", "user_chars", "n_ratings", "initial_rating", "latest_rating", "rating_change", "ad_source_id", "ctwa_clid", "n_referrals"];
+  function sparkline(ratings) {
+    if (!ratings.length) return null;
+    const w = 160, h = 40, pad = 4, n = ratings.length;
+    const x = (i) => pad + (n === 1 ? (w - 2 * pad) / 2 : (i * (w - 2 * pad)) / (n - 1));
+    const y = (v) => h - pad - ((v - 1) / 9) * (h - 2 * pad);
+    const pts = ratings.map((r, i) => `${x(i)},${y(r.score)}`).join(" ");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("class", "spark");
+    svg.innerHTML = `<line x1="${pad}" y1="${y(1)}" x2="${w - pad}" y2="${y(1)}" stroke="#eee"/><line x1="${pad}" y1="${y(10)}" x2="${w - pad}" y2="${y(10)}" stroke="#eee"/>`
+      + `<polyline points="${pts}" fill="none" stroke="#0b6bcb" stroke-width="2"/>`
+      + ratings.map((r, i) => `<circle cx="${x(i)}" cy="${y(r.score)}" r="3" fill="#0b6bcb"><title>${esc(r.score)} at turn ${esc(r.message_index)}</title></circle>`).join("");
+    return svg;
+  }
+  function highlight(text) {
+    const terms = norm(state.q).split(/\s+/).filter(Boolean);
+    if (!terms.length) return esc(text);
+    // map normalized positions back to the original string (NFKD keeps base chars in order)
+    const n = norm(text); let out = "", i = 0; const ranges = [];
+    for (const t of terms) { let p = 0; while ((p = n.indexOf(t, p)) >= 0) { ranges.push([p, p + t.length]); p += t.length; } }
+    ranges.sort((a, b) => a[0] - b[0]);
+    // text and n have the same length only when no combining marks; build an index map to be safe
+    const map = []; for (let k = 0, j = 0; k < text.length; k++) { const nk = norm(text[k]); for (let q = 0; q < nk.length; q++) map[j++] = k; }
+    let last = 0;
+    for (const [a, b] of ranges) { const oa = map[a] ?? text.length, ob = (map[b - 1] ?? text.length - 1) + 1; if (oa < last) continue;
+      out += esc(text.slice(last, oa)) + "<mark>" + esc(text.slice(oa, ob)) + "</mark>"; last = ob; }
+    return out + esc(text.slice(last));
+  }
+  function renderDetail() {
+    const d = state.detail, right = $("#right"); right.innerHTML = "";
+    // header card
+    const head = el("div", "card"); const h = el("h2");
+    h.append(el("span", "id", d.id), el("span", "pill v", d.variant || "?"), el("span", `pill ${d.outcome.replace(" ", "-")}`, d.outcome), el("span", "pill", d.phase));
+    h.append(el("span", "spacer"));
+    const tbtn = el("button", "primary", "Translate to English");
+    const avail = state.status?.translate_available;
+    if (!avail) { tbtn.disabled = true; tbtn.title = "Set OPENAI_API_KEY in browser/.env to enable"; }
+    tbtn.addEventListener("click", () => translateAll(tbtn));
+    const mode = el("select"); mode.id = "enmode"; mode.innerHTML = `<option value="off">Portuguese only</option><option value="both">Both</option><option value="en">English only</option>`;
+    mode.value = state.showEn; mode.style.display = "none"; mode.addEventListener("change", () => { state.showEn = mode.value; applyEnMode(); });
+    const copy = el("button", null, "Copy link"); copy.addEventListener("click", () => { navigator.clipboard?.writeText(location.href); toast("Link copied"); });
+    h.append(tbtn, mode, copy); head.append(h);
+    const kv = el("div", "kv");
+    for (const k of KV_ORDER) { if (!(k in d)) continue; let v = d[k]; if (/_at$/.test(k)) v = fmtDate(v); if (v === null || v === undefined) v = "–";
+      const row = el("div"); row.append(el("span", null, k), el("span", null, String(v))); kv.append(row); }
+    head.append(kv); right.append(head);
+    // ratings card
+    const rc = el("div", "card"); rc.append(el("h2", null, `Trust ratings (${d.ratings.length})`));
+    if (d.ratings.length) {
+      const wrap = el("div", "ratings"); wrap.append(sparkline(d.ratings));
+      const t = el("table"); t.innerHTML = `<tr><th>#</th><th>score</th><th>at turn</th><th>when</th></tr>` +
+        d.ratings.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.score)}</b></td><td>${esc(r.message_index)}${r.message_index === 0 ? " (initial)" : ""}</td><td>${esc(fmtDate(r.timestamp))}</td></tr>`).join("");
+      wrap.append(t); rc.append(wrap);
+    } else rc.append(el("div", null, "No ratings collected."));
+    right.append(rc);
+    // transcript
+    const tc = el("div", "card"); tc.append(el("h2", null, `Transcript (${d.messages.length} messages)`));
+    if (!d.messages.length) tc.append(el("div", null, d.intro_sent ? "Intro sent; participant has not started the conversation." : "No messages stored."));
+    const chat = el("div", "chat");
+    for (const m of d.messages) {
+      const b = el("div", `msg ${m.role}`); b.dataset.idx = m.index;
+      const who = el("div", "who"); who.append(el("span", "n", `#${m.index}`), el("span", null, m.role === "user" ? "participant" : "assistant"), el("span", null, fmtDate(m.timestamp)));
+      const orig = el("div", "orig"); orig.innerHTML = highlight(m.content);
+      b.append(who, orig); chat.append(b);
+    }
+    tc.append(chat);
+    if (d.pending_ai_response) { const p = el("div"); p.style.marginTop = "10px"; p.innerHTML = `<b>Pending reply (held until the check-in rating arrives):</b><br>${esc(d.pending_ai_response)}`; tc.append(p); }
+    right.append(tc);
+    // raw metadata
+    const raw = el("div", "card"); raw.append(el("h2", null, "Raw webhook metadata"));
+    const det = el("details"); det.append(el("summary", null, `first message from Meta${d.first_message_raw?.referral ? " (includes ad referral)" : ""}, referrals (${d.referrals.length})`));
+    det.append(Object.assign(el("pre"), { textContent: JSON.stringify({ first_message_raw: d.first_message_raw, referrals: d.referrals }, null, 2) }));
+    raw.append(det); right.append(raw);
+    if (state.translations.has(d.id)) { state.showEn = "both"; applyTranslations(); }
+    right.scrollTop = 0;
+  }
+  async function translateAll(btn) {
+    const d = state.detail; if (!d || !d.messages.length) return;
+    if (!state.translations.has(d.id)) {
+      btn.disabled = true; btn.textContent = "Translating…";
+      try {
+        const r = await api("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texts: d.messages.map((m) => m.content) }) });
+        state.translations.set(d.id, r.translations);
+      } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = "Translate to English"; return; }
+      btn.textContent = "Translated"; btn.disabled = true;
+    }
+    state.showEn = "both"; applyTranslations();
+  }
+  function applyTranslations() {
+    const tr = state.translations.get(state.detail.id); if (!tr) return;
+    document.querySelectorAll(".msg").forEach((b, i) => { if (!b.querySelector(".en")) b.append(el("div", "en", tr[i])); });
+    const mode = $("#enmode"); if (mode) { mode.style.display = ""; mode.value = state.showEn; }
+    applyEnMode();
+  }
+  function applyEnMode() {
+    document.querySelectorAll(".msg").forEach((b) => { const en = b.querySelector(".en"); if (!en) return;
+      en.style.display = state.showEn === "off" ? "none" : ""; b.classList.toggle("en-only", state.showEn === "en"); });
+  }
+
+  // ---------- status ----------
+  async function loadStatus() {
+    try {
+      const s = await api("/api/status"); state.status = s;
+      const parts = Object.entries(s.by_outcome).map(([k, v]) => `${k}: ${v}`).join(" · ");
+      $("#status").innerHTML = `<b>${s.total}</b> conversations · ${esc(parts)} · refreshed ${esc(ago(s.last_refresh))}${s.demo ? " · <b>DEMO DATA</b>" : ""}${s.last_error ? ` · <span style="color:#b42318">refresh error: ${esc(s.last_error)}</span>` : ""}`;
+    } catch (e) { $("#status").textContent = e.message; }
+  }
+
+  // ---------- wiring ----------
+  let qTimer;
+  $("#q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(async () => { state.q = e.target.value.trim();
+    const u = new URL(location.href); if (state.q) u.searchParams.set("q", state.q); else u.searchParams.delete("q"); history.replaceState(null, "", u);
+    await loadList(); if (state.detail) renderDetail(); }, 300); });
+  $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; renderList(); });
+  $("#order").addEventListener("click", (e) => { state.desc = !state.desc; e.target.textContent = state.desc ? "↓ desc" : "↑ asc"; renderList(); });
+  for (const k of ["outcome", "variant", "phase", "language"]) $(`#f_${k}`).addEventListener("change", (e) => { state.filters[k] = e.target.value; renderList(); });
+  $("#clear").addEventListener("click", async () => { $("#q").value = ""; state.q = ""; for (const k in state.filters) { state.filters[k] = ""; $(`#f_${k}`).value = ""; } await loadList(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === "j" || e.key === "k") { const rows = visible(); const i = rows.findIndex((c) => c.id === state.selected); const n = rows[e.key === "j" ? i + 1 : i - 1]; if (n) select(n.id); }
+    if (e.key === "/") { e.preventDefault(); $("#q").focus(); }
+  });
+  window.addEventListener("hashchange", () => { const id = location.hash.slice(1); if (id && id !== state.selected) select(id, false); });
+
+  (async () => {
+    const q0 = new URLSearchParams(location.search).get("q"); if (q0) { $("#q").value = q0; state.q = q0.trim(); }
+    await loadStatus(); await loadList();
+    const id = location.hash.slice(1); if (id) select(id, false);
+    setInterval(async () => { await loadStatus(); const before = state.all.length; await loadList(); }, (state.status?.refresh_seconds || 30) * 1000);
+  })();
+})();
+</script>
+</body>
+</html>

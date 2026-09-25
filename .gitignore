@@ -2,6 +2,7 @@
 .env.*
 !.env.schema
 !dashboard/.env.schema
+!browser/.env.schema
 *.json
 !package.json
 __pycache__/
