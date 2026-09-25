@@ -51,6 +51,7 @@ reachable through an SSH tunnel).
 - **Sort** by start time, last activity, turns, messages, total length, user-text length, duration, rating change, initial or latest rating, or number of ratings. Missing values sort last.
 - **Filters** narrow by outcome, variant, phase, and language.
 - **Translate to English** sends the transcript to OpenAI through the server and shows English under each message; a selector switches between Portuguese only, both, or English only. The translation is never stored in the database.
+- **Export CSV** (header button) downloads every conversation as one row, ready for pandas or R. Every scalar is its own column; the transcript, the trust ratings, the original ad referral, and the raw first webhook message are each a JSON string in a single column. While a search is active the button exports only the matches, and the filename gets a `_filtered` suffix. The file is UTF-8 with a BOM so Excel shows Portuguese accents correctly.
 - **Links** carry the selected conversation (`#id`) and the search (`?q=`), so a URL can be pasted to a colleague who has the password. `j` / `k` move through the list.
 
 Participant identifiers are the same salted hashes the Grafana dashboard uses,
@@ -98,3 +99,27 @@ All endpoints require the same Basic auth as the page.
 | `GET /api/conversations/{id}` | full transcript, ratings, metadata, raw first message and referrals |
 | `POST /api/translate` `{"texts": [...]}` | English translations, same order |
 | `POST /api/refresh` | force a full reload from Firestore |
+| `GET /api/export.csv?q=words` | all (or matching) conversations as CSV, see below |
+
+### CSV columns
+
+| Group | Columns |
+|---|---|
+| identity | `id` (salted hash), `phone` and `profile_name` only when `BROWSER_SHOW_PHONE=true`, `variant`, `prompt_variant`, `language` |
+| state | `phase`, `outcome`, `intro_sent` |
+| timeline | `started_at`, `first_message_at`, `last_user_msg_at`, `last_assistant_msg_at`, `last_activity_at`, `debriefed_at`, `duration_min` |
+| volume | `user_turn_count`, `n_messages`, `n_user_messages`, `n_assistant_messages`, `n_chars`, `user_chars`, `assistant_chars`, `avg_user_msg_chars`, `avg_assistant_msg_chars` |
+| ratings | `n_ratings`, `initial_rating`, `latest_rating`, `rating_change`, `ratings` (compact `turn:score;...`), `ratings_json` |
+| ad attribution | `ad_source_id`, `ad_source_type`, `ad_source_url`, `ad_headline`, `ad_body`, `ad_media_type`, `ctwa_clid`, `n_referrals`, `first_message_id`, `first_message_type` |
+| JSON blobs | `referral_json` (the original referral object), `all_referrals_json`, `first_message_raw_json`, `transcript_json` (list of `{index, role, content, timestamp}`) |
+| other | `pending_ai_response` |
+
+Loading it in pandas:
+
+```python
+import json, pandas as pd
+df = pd.read_csv("conversations_20260925T180000Z.csv")
+df["transcript"] = df["transcript_json"].map(json.loads)
+df.groupby("variant")["rating_change"].mean()
+```
+

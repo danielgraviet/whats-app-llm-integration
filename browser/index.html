@@ -55,6 +55,8 @@
   .delta.up { color: var(--ok); } .delta.down { color: var(--bad); } .delta.flat { color: var(--muted); }
   #right { overflow-y: auto; padding: 16px 20px; min-width: 0; }
   #theme { margin-left: 10px; }
+  a.btn { padding: 5px 10px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600; text-decoration: none; margin-left: 10px; white-space: nowrap; }
+  a.btn:hover { filter: brightness(1.1); }
   #empty { color: var(--muted); margin-top: 40px; text-align: center; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
   .card h2 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
@@ -86,6 +88,7 @@
 <header>
   <h1>WhatsApp Study · Conversation Browser</h1>
   <span class="status" id="status">loading…</span>
+  <a id="export" class="btn" href="/api/export.csv" download title="Download every conversation as one CSV row (transcript and ad referral as JSON columns)">⬇ Export CSV</a>
   <button id="theme" title="toggle light / dark">☀ light</button>
 </header>
 <div id="layout">
@@ -328,6 +331,9 @@
   $("#q").addEventListener("input", (e) => { clearTimeout(qTimer); qTimer = setTimeout(async () => { state.q = e.target.value.trim();
     const u = new URL(location.href); if (state.q) u.searchParams.set("q", state.q); else u.searchParams.delete("q"); history.replaceState(null, "", u);
     await loadList(); if (state.detail) renderDetail(); }, 300); });
+  const syncExport = () => { const a = $("#export"); a.href = state.q ? `/api/export.csv?q=${encodeURIComponent(state.q)}` : "/api/export.csv";
+    a.textContent = state.q ? "⬇ Export CSV (matches)" : "⬇ Export CSV"; };
+  new MutationObserver(syncExport).observe($("#count"), { childList: true });
   $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; renderList(); });
   $("#order").addEventListener("click", (e) => { state.desc = !state.desc; e.target.textContent = state.desc ? "↓ desc" : "↑ asc"; renderList(); });
   for (const k of ["outcome", "variant", "phase", "language"]) $(`#f_${k}`).addEventListener("change", (e) => { state.filters[k] = e.target.value; renderList(); });

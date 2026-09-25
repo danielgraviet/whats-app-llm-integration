@@ -18,12 +18,17 @@ Endpoints (all behind HTTP Basic auth unless --demo or BROWSER_ALLOW_NO_AUTH=1):
     POST /api/translate          {"texts": [...]} -> {"translations": [...]} via OpenAI;
                                  cached in memory only, nothing is written anywhere
     POST /api/refresh            force a full reload from Firestore
+    GET  /api/export.csv         every conversation as one CSV row (scalars broken out;
+                                 transcript and original ad referral as JSON columns)
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
+import io
+import json
 import datetime as dt
 import hashlib
 import logging
@@ -39,7 +44,7 @@ from typing import Any
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
@@ -140,6 +145,27 @@ def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, 
     return "in progress"
 
 
+CSV_COLUMNS = [
+    # identity & assignment
+    "id", "phone", "profile_name", "variant", "prompt_variant", "language",
+    # state
+    "phase", "outcome", "intro_sent",
+    # timeline
+    "started_at", "first_message_at", "last_user_msg_at", "last_assistant_msg_at", "last_activity_at", "debriefed_at", "duration_min",
+    # volume
+    "user_turn_count", "n_messages", "n_user_messages", "n_assistant_messages",
+    "n_chars", "user_chars", "assistant_chars", "avg_user_msg_chars", "avg_assistant_msg_chars",
+    # trust ratings
+    "n_ratings", "initial_rating", "latest_rating", "rating_change", "ratings", "ratings_json",
+    # ad attribution
+    "ad_source_id", "ad_source_type", "ad_source_url", "ad_headline", "ad_body", "ad_media_type", "ctwa_clid", "n_referrals",
+    "first_message_id", "first_message_type",
+    # JSON blobs
+    "referral_json", "all_referrals_json", "first_message_raw_json", "transcript_json",
+    "pending_ai_response",
+]
+
+
 # ----------------------------------------------------------------------------
 # conversation model built from a Firestore document
 # ----------------------------------------------------------------------------
@@ -233,6 +259,43 @@ class Conv:
             fm.pop("from", None)
             d["first_message_raw"] = fm
         return d
+
+    def csv_row(self, now: dt.datetime) -> dict:
+        """One flat row per conversation for analysis. Column order = CSV_COLUMNS."""
+        sm = self.summary(now)
+        user_msgs = [m for m in self.messages if m["role"] == "user"]
+        asst_msgs = [m for m in self.messages if m["role"] == "assistant"]
+        raw_first = dict(self.raw.get("first_message_raw") or {})
+        referral = raw_first.get("referral") or {}
+        if not SHOW_PHONE:
+            raw_first.pop("from", None)
+        first_msg_at = _utc(raw_first.get("timestamp"))
+        row = {
+            **sm,
+            "first_message_at": _iso(first_msg_at),
+            "first_message_id": raw_first.get("id"),
+            "first_message_type": raw_first.get("type"),
+            "last_user_msg_at": max((m["timestamp"] for m in user_msgs if m["timestamp"]), default=None),
+            "last_assistant_msg_at": max((m["timestamp"] for m in asst_msgs if m["timestamp"]), default=None),
+            "n_user_messages": len(user_msgs),
+            "n_assistant_messages": len(asst_msgs),
+            "assistant_chars": sum(len(m["content"]) for m in asst_msgs),
+            "avg_user_msg_chars": round(sm["user_chars"] / len(user_msgs), 1) if user_msgs else None,
+            "avg_assistant_msg_chars": round(sum(len(m["content"]) for m in asst_msgs) / len(asst_msgs), 1) if asst_msgs else None,
+            "ratings": ";".join(f"{r['message_index']}:{r['score']}" for r in self.ratings),
+            "ratings_json": json.dumps(self.ratings, ensure_ascii=False),
+            "ad_source_type": referral.get("source_type"),
+            "ad_source_url": referral.get("source_url"),
+            "ad_headline": referral.get("headline"),
+            "ad_body": referral.get("body"),
+            "ad_media_type": referral.get("media_type"),
+            "referral_json": json.dumps(referral, ensure_ascii=False) if referral else "",
+            "all_referrals_json": json.dumps(_jsonable(self.raw.get("referrals") or []), ensure_ascii=False),
+            "first_message_raw_json": json.dumps(_jsonable(raw_first), ensure_ascii=False) if raw_first else "",
+            "transcript_json": json.dumps(self.messages, ensure_ascii=False),
+            "pending_ai_response": self.raw.get("pending_ai_response") or "",
+        }
+        return row
 
     def matches(self, terms: list[str]) -> bool:
         hay = self.search_text + " " + normalize(f"{self.id} {self.variant} {self.ad_source_id or ''} {self.phase}")
@@ -462,6 +525,29 @@ async def translate(body: TranslateBody):
     except Exception as e:
         log.exception("translation failed")
         raise HTTPException(502, f"translation failed: {type(e).__name__}")
+
+
+@app.get("/api/export.csv", dependencies=[Depends(require_auth)])
+def export_csv(q: str = ""):
+    """All conversations (or those matching q) as CSV. UTF-8 with BOM so Excel reads accents."""
+    now = dt.datetime.now(dt.timezone.utc)
+    terms = [t for t in normalize(q).split() if t]
+    cols = [c for c in CSV_COLUMNS if SHOW_PHONE or c not in ("phone", "profile_name")]
+    convs = sorted(STORE.convs.values(), key=lambda c: c.started_at or dt.datetime.min.replace(tzinfo=dt.timezone.utc))
+
+    def gen():
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore", quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+        yield "\ufeff"
+        w.writeheader(); yield buf.getvalue(); buf.seek(0); buf.truncate()
+        for c in convs:
+            if terms and not c.matches(terms):
+                continue
+            w.writerow(c.csv_row(now)); yield buf.getvalue(); buf.seek(0); buf.truncate()
+
+    name = f"conversations_{now.strftime('%Y%m%dT%H%M%SZ')}{'_filtered' if terms else ''}.csv"
+    return StreamingResponse(gen(), media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
 
 
 @app.post("/api/refresh", dependencies=[Depends(require_auth)])
