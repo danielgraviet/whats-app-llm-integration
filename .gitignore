@@ -14,3 +14,6 @@ testing.log
 
 # Grafana dashboard definitions are source, not credentials
 !dashboard/grafana/provisioning/dashboards/*.json
+
+# local Firestore backups (contain participant data)
+backups/
