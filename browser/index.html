@@ -6,9 +6,24 @@
 <title>WhatsApp Study – Conversation Browser</title>
 <style>
   :root {
-    --bg: #f4f5f7; --panel: #fff; --line: #e1e4e8; --text: #1f2328; --muted: #6a737d;
-    --accent: #0b6bcb; --user: #dcf8c6; --bot: #fff; --hl: #fff3a0;
+    color-scheme: dark;
+    --bg: #0f1216; --panel: #171b21; --panel2: #1d222a; --line: #2a313b; --text: #e6e9ee; --muted: #8b95a3;
+    --accent: #4c9aff; --accent-text: #0b1220; --user: #1f3d2a; --bot: #1d222a; --hl: #7a5d00; --hl-text: #fff;
+    --ok: #3fb950; --warn: #e3b341; --bad: #f85149; --info: #b48bff;
+    --pill-bg: #2a313b; --pill-text: #c9d1d9;
+    --pill-v-bg: #2c2350; --pill-ok-bg: #12351f; --pill-bad-bg: #4a1a1a; --pill-warn-bg: #3d2f0a; --pill-neutral-bg: #2a313b;
+    --hover: #1d222a; --active: #1a2a3f; --code-bg: #0f1216; --toast-bg: #e6e9ee; --toast-text: #0f1216;
+    --spark: #4c9aff; --spark-grid: #2a313b; --en-border: #48505c; --en-text: #c9d1d9;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f4f5f7; --panel: #fff; --panel2: #fff; --line: #e1e4e8; --text: #1f2328; --muted: #6a737d;
+    --accent: #0b6bcb; --accent-text: #fff; --user: #dcf8c6; --bot: #fff; --hl: #fff3a0; --hl-text: #1f2328;
     --ok: #1a7f37; --warn: #b26a00; --bad: #b42318; --info: #6639ba;
+    --pill-bg: #eee; --pill-text: #444;
+    --pill-v-bg: #e7e3ff; --pill-ok-bg: #dafbe1; --pill-bad-bg: #ffebe9; --pill-warn-bg: #fff1d6; --pill-neutral-bg: #eee;
+    --hover: #f6f8fa; --active: #e8f1fb; --code-bg: #f6f8fa; --toast-bg: #222; --toast-text: #fff;
+    --spark: #0b6bcb; --spark-grid: #eee; --en-border: #bbb; --en-text: #333;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -20,25 +35,26 @@
   #layout { display: grid; grid-template-columns: 420px 1fr; height: calc(100% - 45px); }
   #left { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-width: 0; }
   #controls { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
-  #controls input[type=search] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+  #controls input[type=search] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; background: var(--panel2); color: var(--text); }
   .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  select, button { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 13px; color: var(--text); }
-  button { cursor: pointer; } button:hover { border-color: var(--accent); } button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  select, button { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); font-size: 13px; color: var(--text); }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); } button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
   button:disabled { opacity: .5; cursor: default; }
   .count { color: var(--muted); font-size: 12px; margin-left: auto; }
   #list { overflow-y: auto; flex: 1; }
   .item { padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
-  .item:hover { background: #f6f8fa; } .item.active { background: #e8f1fb; border-left: 3px solid var(--accent); padding-left: 9px; }
+  .item:hover { background: var(--hover); } .item.active { background: var(--active); border-left: 3px solid var(--accent); padding-left: 9px; }
   .item .top { display: flex; gap: 6px; align-items: center; }
   .item .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
   .item .meta { color: var(--muted); font-size: 12px; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
-  .item .snippet { font-size: 12px; margin-top: 4px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #eee; color: #444; }
-  .pill.v { background: #e7e3ff; color: var(--info); }
-  .pill.completed { background: #dafbe1; color: var(--ok); } .pill.abandoned { background: #ffebe9; color: var(--bad); }
-  .pill.in-progress { background: #fff1d6; color: var(--warn); } .pill.never-rated { background: #eee; color: #555; }
+  .item .snippet { font-size: 12px; margin-top: 4px; color: var(--en-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--pill-bg); color: var(--pill-text); }
+  .pill.v { background: var(--pill-v-bg); color: var(--info); }
+  .pill.completed { background: var(--pill-ok-bg); color: var(--ok); } .pill.abandoned { background: var(--pill-bad-bg); color: var(--bad); }
+  .pill.in-progress { background: var(--pill-warn-bg); color: var(--warn); } .pill.never-rated { background: var(--pill-neutral-bg); color: var(--muted); }
   .delta.up { color: var(--ok); } .delta.down { color: var(--bad); } .delta.flat { color: var(--muted); }
   #right { overflow-y: auto; padding: 16px 20px; min-width: 0; }
+  #theme { margin-left: 10px; }
   #empty { color: var(--muted); margin-top: 40px; text-align: center; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
   .card h2 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
@@ -51,16 +67,16 @@
   .ratings th { color: var(--muted); font-weight: 600; font-size: 12px; }
   .chat { display: flex; flex-direction: column; gap: 8px; }
   .msg { max-width: 78%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); white-space: pre-wrap; word-wrap: break-word; position: relative; }
-  .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 2px; }
+  .msg.user { align-self: flex-end; background: var(--user); border-color: transparent; border-bottom-right-radius: 2px; }
   .msg.assistant { align-self: flex-start; background: var(--bot); border-bottom-left-radius: 2px; }
   .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; }
   .msg .who .n { font-family: ui-monospace, Menlo, monospace; }
-  .msg .en { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #bbb; color: #333; font-style: italic; }
+  .msg .en { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--en-border); color: var(--en-text); font-style: italic; }
   .msg.en-only .orig { display: none; } .msg.en-only .en { border-top: 0; margin-top: 0; padding-top: 0; font-style: normal; }
-  mark { background: var(--hl); padding: 0 1px; }
+  mark { background: var(--hl); color: var(--hl-text); padding: 0 1px; border-radius: 2px; }
   details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
-  pre { background: #f6f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; }
-  .toast { position: fixed; bottom: 16px; right: 16px; background: #222; color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; color: var(--text); }
+  .toast { position: fixed; bottom: 16px; right: 16px; background: var(--toast-bg); color: var(--toast-text); padding: 10px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: 1; }
   .spark { vertical-align: middle; }
   @media (max-width: 900px) { #layout { grid-template-columns: 1fr; grid-template-rows: 45% 55%; } #left { border-right: 0; border-bottom: 1px solid var(--line); } }
@@ -70,6 +86,7 @@
 <header>
   <h1>WhatsApp Study · Conversation Browser</h1>
   <span class="status" id="status">loading…</span>
+  <button id="theme" title="toggle light / dark">☀ light</button>
 </header>
 <div id="layout">
   <div id="left">
@@ -108,6 +125,14 @@
 
 <script>
 (() => {
+  // Theme: dark by default; the toggle stores the choice in localStorage (per browser, never sent anywhere).
+  const root = document.documentElement;
+  const applyTheme = (t) => { if (t === "light") root.setAttribute("data-theme", "light"); else root.removeAttribute("data-theme");
+    const b = document.getElementById("theme"); if (b) b.textContent = t === "light" ? "☾ dark" : "☀ light"; };
+  let theme = "dark"; try { theme = localStorage.getItem("theme") || "dark"; } catch {}
+  applyTheme(theme);
+  document.getElementById("theme").addEventListener("click", () => { theme = theme === "light" ? "dark" : "light"; try { localStorage.setItem("theme", theme); } catch {} applyTheme(theme); });
+
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -199,9 +224,9 @@
     const pts = ratings.map((r, i) => `${x(i)},${y(r.score)}`).join(" ");
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("class", "spark");
-    svg.innerHTML = `<line x1="${pad}" y1="${y(1)}" x2="${w - pad}" y2="${y(1)}" stroke="#eee"/><line x1="${pad}" y1="${y(10)}" x2="${w - pad}" y2="${y(10)}" stroke="#eee"/>`
-      + `<polyline points="${pts}" fill="none" stroke="#0b6bcb" stroke-width="2"/>`
-      + ratings.map((r, i) => `<circle cx="${x(i)}" cy="${y(r.score)}" r="3" fill="#0b6bcb"><title>${esc(r.score)} at turn ${esc(r.message_index)}</title></circle>`).join("");
+    svg.innerHTML = `<line x1="${pad}" y1="${y(1)}" x2="${w - pad}" y2="${y(1)}" stroke="var(--spark-grid)"/><line x1="${pad}" y1="${y(10)}" x2="${w - pad}" y2="${y(10)}" stroke="var(--spark-grid)"/>`
+      + `<polyline points="${pts}" fill="none" stroke="var(--spark)" stroke-width="2"/>`
+      + ratings.map((r, i) => `<circle cx="${x(i)}" cy="${y(r.score)}" r="3" fill="var(--spark)"><title>${esc(r.score)} at turn ${esc(r.message_index)}</title></circle>`).join("");
     return svg;
   }
   function highlight(text) {
@@ -294,7 +319,7 @@
     try {
       const s = await api("/api/status"); state.status = s;
       const parts = Object.entries(s.by_outcome).map(([k, v]) => `${k}: ${v}`).join(" · ");
-      $("#status").innerHTML = `<b>${s.total}</b> conversations · ${esc(parts)} · refreshed ${esc(ago(s.last_refresh))}${s.demo ? " · <b>DEMO DATA</b>" : ""}${s.last_error ? ` · <span style="color:#b42318">refresh error: ${esc(s.last_error)}</span>` : ""}`;
+      $("#status").innerHTML = `<b>${s.total}</b> conversations · ${esc(parts)} · refreshed ${esc(ago(s.last_refresh))}${s.demo ? " · <b>DEMO DATA</b>" : ""}${s.last_error ? ` · <span style="color:var(--bad)">refresh error: ${esc(s.last_error)}</span>` : ""}`;
     } catch (e) { $("#status").textContent = e.message; }
   }
 
