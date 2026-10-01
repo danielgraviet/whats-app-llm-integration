@@ -121,8 +121,9 @@
   (async () => {
     try { T = await api("api/text"); } catch {}
     $("#title").textContent = T.title || $("#title").textContent; $("#subtitle").textContent = T.subtitle || ""; $("#footer").textContent = T.footer || ""; input.placeholder = T.placeholder || input.placeholder;
-    let saved = null; try { saved = localStorage.getItem(KEY); } catch {}
-    const meta = { session_id: saved, query: Object.fromEntries(new URLSearchParams(location.search)), referrer: document.referrer, user_agent: navigator.userAgent,
+    const params = new URLSearchParams(location.search);
+    let saved = null; try { saved = params.has("new") ? null : localStorage.getItem(KEY); } catch {}   // ?new=1 starts over (testers)
+    const meta = { session_id: saved, query: Object.fromEntries(params), referrer: document.referrer, user_agent: navigator.userAgent,
       language: navigator.language, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, page_url: location.href };
     let st;
     try { st = await api("api/session", meta); } catch (e) { sysNote(T.error || "Erro ao iniciar."); return; }

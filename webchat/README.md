@@ -25,7 +25,8 @@ Portuguese only, phone-first layout in the WhatsApp visual style:
 3. A check-in rating every `TRUST_CHECK_INTERVAL` (3) user messages; input is blocked until they rate, as on WhatsApp.
 4. After `DEBRIEF_AFTER_TURNS` (8) user messages: the reply, then the debriefing text with the TSE links and contact email, then the conversation is closed.
 
-Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage). Typed "/info", "/reset" and "/lang" are ordinary text here.
+Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage). Typed "/info", "/reset" and "/lang" are ordinary text here. To start a fresh
+conversation while testing, open the page with `?new=1` (or use a private window).
 
 ## What is recorded
 
@@ -60,11 +61,14 @@ uv pip install --python .venv/bin/python -r webchat/requirements.txt
 
 # 2. secrets: copy the template and fill in Firebase creds + OpenAI key (same values Railway has)
 sudo cp webchat/.env.schema webchat/.env && sudo nano webchat/.env
-sudo chown -R www-data:www-data /opt/whats-app-llm-integration && sudo chmod 600 webchat/.env
+chmod 600 webchat/.env
 
-# 3. service
+# 3. service: set the user and paths to match your checkout (the template assumes
+#    /opt/... owned by www-data; a wrong User shows as "status=217/USER")
 sudo cp webchat/deploy/webchat.service /etc/systemd/system/
+sudo sed -i "s/^User=.*/User=$USER/; s#/opt/whats-app-llm-integration#$PWD#g" /etc/systemd/system/webchat.service
 sudo systemctl daemon-reload && sudo systemctl enable --now webchat
+journalctl -u webchat -n 20 --no-pager        # startup log: env files loaded, collection, any missing key
 curl -s http://127.0.0.1:8100/health          # {"status":"healthy",...,"collection":"web_conversations"}
 
 # 4. nginx: paste webchat/deploy/nginx-pesquisa.conf into the pccgo server block

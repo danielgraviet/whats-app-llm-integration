@@ -76,7 +76,17 @@ from integrations import openai_client  # noqa: E402
 PORT = int(os.getenv("WEBCHAT_PORT", "8100"))
 HOST = os.getenv("WEBCHAT_HOST", "127.0.0.1")
 IP_SALT = os.getenv("WEBCHAT_IP_SALT", "")
-GIT_SHA = os.getenv("GIT_COMMIT_SHA") or ""
+def _git_sha() -> str:
+    if os.getenv("GIT_COMMIT_SHA"):
+        return os.environ["GIT_COMMIT_SHA"]
+    try:
+        import subprocess
+        return subprocess.run(["git", "-C", str(PROJECT_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip()
+    except Exception:
+        return ""
+
+
+GIT_SHA = _git_sha()
 MAX_MESSAGE_CHARS = int(os.getenv("WEBCHAT_MAX_MESSAGE_CHARS", "2000"))
 
 # Texts used by the page. Everything the participant reads is Portuguese.
@@ -210,12 +220,12 @@ def shape(sid: str, bot) -> dict:
 # ----------------------------------------------------------------------------
 # routes
 # ----------------------------------------------------------------------------
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def index():
     return FileResponse(WEBCHAT_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "healthy", "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION}
 

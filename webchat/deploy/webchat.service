@@ -1,7 +1,13 @@
 # /etc/systemd/system/webchat.service
-# Adjust User/WorkingDirectory/ExecStart to where the repo and venv live, then:
+#
+# BEFORE enabling: set User to the account that owns the checkout, and the two
+# paths to where the repo and its .venv live. A wrong User fails with
+# "status=217/USER" before Python even starts. Example for a checkout in
+# /home/admin owned by admin:
+#   sudo sed -i 's/^User=.*/User=admin/; s#/opt/whats-app-llm-integration#/home/admin/whats-app-llm-integration#g' /etc/systemd/system/webchat.service
+# then:
 #   sudo systemctl daemon-reload && sudo systemctl enable --now webchat
-#   sudo systemctl status webchat ; journalctl -u webchat -f
+#   sudo systemctl status webchat ; journalctl -u webchat -n 30 --no-pager
 [Unit]
 Description=Urnas study web chat (webchat/app.py)
 After=network.target
