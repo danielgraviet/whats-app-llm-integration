@@ -15,3 +15,17 @@ datasources:
       postgresVersion: 1700
     isDefault: true
     editable: true
+  - name: Web Study TimescaleDB
+    uid: wa-timescale-web         # web_dashboard.json references this uid
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: timescaledb:5432
+    user: postgres
+    secureJsonData:
+      password: ${PG_PASSWORD}
+    jsonData:
+      database: webstudy          # created by dashboard/init-web-db.sql
+      sslmode: disable
+      timescaledb: true
+      postgresVersion: 1700
+    editable: true

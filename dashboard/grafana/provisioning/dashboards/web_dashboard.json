@@ -1,6 +1,6 @@
 {
-  "uid": "whatsapp-study",
-  "title": "WhatsApp Study",
+  "uid": "web-study",
+  "title": "Web Study",
   "description": "Live and historical view of the WhatsApp LLM study, fed from Firestore by dashboard/export_to_postgres.py.",
   "tags": [
     "whatsapp",
@@ -68,7 +68,7 @@
       "description": "Sampled every poll tick, zeros included, so the line stays flat at 0 when nothing is happening. Active = not ended and the participant's conversation was updated within the window. Awaiting rating = blocked on a trust-rating reply (initial or check-in).",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -80,7 +80,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "time_series",
@@ -150,7 +150,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -162,7 +162,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -217,7 +217,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -229,7 +229,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -284,7 +284,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -296,7 +296,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -351,7 +351,7 @@
       "description": "If this is more than a minute old the poller is not running.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -363,7 +363,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -431,7 +431,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -443,7 +443,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -498,7 +498,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -510,7 +510,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -565,7 +565,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -577,7 +577,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -632,7 +632,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -644,7 +644,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -699,7 +699,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -711,7 +711,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -766,7 +766,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -778,7 +778,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -834,7 +834,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -846,7 +846,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -902,7 +902,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -914,7 +914,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -970,7 +970,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -982,7 +982,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1038,7 +1038,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -1050,7 +1050,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1106,7 +1106,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -1118,7 +1118,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1173,7 +1173,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 4,
@@ -1185,7 +1185,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1253,7 +1253,7 @@
       "description": "User and assistant messages, gap-filled to zero.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1265,7 +1265,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "time_series",
@@ -1335,7 +1335,7 @@
       "description": "Started = first message received. Completed = debrief sent. Gap-filled to zero.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1347,7 +1347,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "time_series",
@@ -1430,7 +1430,7 @@
       "description": "Abandoned = not ended and silent for longer than abandon_after() in the database (default 24 h; change it with CREATE OR REPLACE FUNCTION, see dashboard/README.md). Never rated = dropped before the initial trust rating.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1442,7 +1442,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1504,7 +1504,7 @@
       "description": "Randomisation balance across the five prompt conditions.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1516,7 +1516,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1578,7 +1578,7 @@
       "description": "First referral's ad id from the Click-to-WhatsApp webhook. 'no referral' = arrived without an ad click.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1590,7 +1590,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1665,7 +1665,7 @@
       "description": "Mean initial (before the conversation) and most recent trust rating, 1-10, per prompt condition. n = participants with at least one rating.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1677,7 +1677,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1745,7 +1745,7 @@
       "description": "Hourly mean of every rating submitted. Gaps are hours with no ratings.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1757,7 +1757,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "time_series",
@@ -1827,7 +1827,7 @@
       "description": "User messages per conversation, one bucket per turn.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1839,7 +1839,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1885,7 +1885,7 @@
       "description": "First message to last activity.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1897,7 +1897,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -1943,7 +1943,7 @@
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 8,
@@ -1955,7 +1955,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",
@@ -2014,7 +2014,7 @@
       "description": "Participants are shown by salted hash only; the raw phone number or session id is not in this database.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
-        "uid": "wa-timescale"
+        "uid": "wa-timescale-web"
       },
       "gridPos": {
         "h": 10,
@@ -2026,7 +2026,7 @@
         {
           "datasource": {
             "type": "grafana-postgresql-datasource",
-            "uid": "wa-timescale"
+            "uid": "wa-timescale-web"
           },
           "editorMode": "code",
           "format": "table",

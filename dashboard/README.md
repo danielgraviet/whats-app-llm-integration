@@ -145,6 +145,29 @@ CREATE OR REPLACE FUNCTION abandon_after() RETURNS interval
     LANGUAGE sql IMMUTABLE AS $$ SELECT interval '48 hours' $$;
 ```
 
+## Second study (web)
+
+The web version of the study (`webchat/`) writes to Firestore collection
+`web_conversations`. It gets its own database and dashboard so the two
+studies never mix:
+
+```bash
+cd dashboard
+git pull && docker compose up -d                      # picks up the second Grafana datasource
+docker exec -i wa-timescaledb psql -U postgres < init-web-db.sql            # creates database "webstudy"
+docker exec -i wa-timescaledb psql -U postgres -d webstudy < schema.sql     # same tables
+cp .env.web.schema .env.web && $EDITOR .env.web       # collection + DSN for the web poller
+cd .. && DASHBOARD_ENV_FILE=dashboard/.env.web python dashboard/export_to_postgres.py --backfill
+```
+
+Grafana then shows two dashboards, "WhatsApp Study" and "Web Study", with
+identical panels. Run the two pollers side by side (two systemd units or two
+tmux windows). Share the web one the same way (Share > Share externally).
+
+For the conversation browser, run a second instance with
+`FIRESTORE_COLLECTION=web_conversations` and a different `BROWSER_PORT` in
+its own env file (`BROWSER_ENV_FILE=browser/.env.web python browser/server.py`).
+
 ## Sharing the dashboard
 
 Grafana's **Share > Share externally** (a "public dashboard") gives a link
