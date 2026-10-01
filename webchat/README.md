@@ -39,11 +39,24 @@ Same document shape as WhatsApp, in collection `web_conversations`, keyed by a r
 
 ## Install on pccgo.cs.byu.edu
 
+Requires **Python 3.10 or newer** (the code uses `X | None` annotations and
+the OpenAI SDK's `jiter` dependency has no wheels for older interpreters). If
+`python3 --version` on the server is older, do not fight the system Python:
+let `uv` fetch a private one into the venv (no root needed).
+
 ```bash
 # 1. code + venv
 sudo git clone https://github.com/danielgraviet/whats-app-llm-integration.git /opt/whats-app-llm-integration
 cd /opt/whats-app-llm-integration
-sudo python3 -m venv .venv && sudo .venv/bin/pip install -r webchat/requirements.txt
+
+# 1a. system Python is 3.10+:
+python3 -m venv .venv && .venv/bin/pip install -r webchat/requirements.txt
+
+# 1b. system Python is older (e.g. Ubuntu 20.04/22.04):
+curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH="$HOME/.local/bin:$PATH"
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r webchat/requirements.txt
+.venv/bin/python --version      # 3.12.x
 
 # 2. secrets: copy the template and fill in Firebase creds + OpenAI key (same values Railway has)
 sudo cp webchat/.env.schema webchat/.env && sudo nano webchat/.env

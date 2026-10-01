@@ -21,6 +21,12 @@ Endpoints (all relative, so the app works under any nginx prefix):
 
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 10):
+    sys.exit(f"webchat needs Python 3.10 or newer (this is {sys.version.split()[0]}). "
+             "See webchat/README.md, 'Install': use uv to get a managed Python, or install python3.12.")
+
 import argparse
 import asyncio
 import datetime as dt
@@ -28,7 +34,6 @@ import hashlib
 import logging
 import os
 import secrets
-import sys
 import time
 from pathlib import Path
 from typing import Any
