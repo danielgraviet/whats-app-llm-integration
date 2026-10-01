@@ -53,8 +53,8 @@ log = logging.getLogger("webchat")
 
 def load_env_files() -> list[Path]:
     loaded = []
-    for path in [Path(os.getenv("WEBCHAT_ENV_FILE") or WEBCHAT_DIR / ".env"), PROJECT_ROOT / f".env.{os.getenv('APP_ENV', 'local')}"]:
-        if path.is_file():
+    for path in [Path(os.getenv("WEBCHAT_ENV_FILE")) if os.getenv("WEBCHAT_ENV_FILE") else None, WEBCHAT_DIR / ".env", PROJECT_ROOT / f".env.{os.getenv('APP_ENV', 'local')}"]:
+        if path is not None and path.is_file():
             load_dotenv(path, override=False); loaded.append(path)
     return loaded
 

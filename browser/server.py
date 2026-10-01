@@ -62,10 +62,11 @@ def load_env_files() -> list[Path]:
     """browser/.env first, then the app's .env.<APP_ENV>; shell vars win over both."""
     loaded = []
     for path in [
-        Path(os.getenv("BROWSER_ENV_FILE") or BROWSER_DIR / ".env"),
+        Path(os.getenv("BROWSER_ENV_FILE")) if os.getenv("BROWSER_ENV_FILE") else None,
+        BROWSER_DIR / ".env",
         PROJECT_ROOT / f".env.{os.getenv('APP_ENV', 'local')}",
     ]:
-        if path.is_file():
+        if path is not None and path.is_file():
             load_dotenv(path, override=False)
             loaded.append(path)
     return loaded

@@ -91,8 +91,9 @@ python dashboard/export_to_postgres.py --backfill  # re-read everything once, th
 Settings are read from `.env` files, in this order. The first definition of a
 variable wins, and anything already set in the shell wins over both.
 
-1. `dashboard/.env` (copy `dashboard/.env.schema` to start). Override the path with `DASHBOARD_ENV_FILE`.
-2. `.env.<APP_ENV>` in the project root, `APP_ENV` defaulting to `local`. This is the app's own file, so the Firebase credentials do not need to be repeated.
+1. The file named by `DASHBOARD_ENV_FILE`, if set (used for a second poller instance).
+2. `dashboard/.env` (copy `dashboard/.env.schema` to start).
+3. `.env.<APP_ENV>` in the project root, `APP_ENV` defaulting to `local`. This is the app's own file, so the Firebase credentials do not need to be repeated.
 
 | Variable | Default | Meaning |
 |---|---|---|

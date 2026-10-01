@@ -56,12 +56,15 @@ PROJECT_ROOT = DASHBOARD_DIR.parent
 def load_env_files() -> list[Path]:
     """Load dashboard/.env, then the app's .env.<APP_ENV>. Returns what was loaded."""
     loaded = []
+    # explicit override first, then this directory's own .env, then the app's
+    # .env.<APP_ENV>; earlier files win for overlapping keys.
     candidates = [
-        Path(os.getenv("DASHBOARD_ENV_FILE") or DASHBOARD_DIR / ".env"),
+        Path(os.getenv("DASHBOARD_ENV_FILE")) if os.getenv("DASHBOARD_ENV_FILE") else None,
+        DASHBOARD_DIR / ".env",
         PROJECT_ROOT / f".env.{os.getenv('APP_ENV', 'local')}",
     ]
     for path in candidates:
-        if path.is_file():
+        if path is not None and path.is_file():
             # override=False: earlier files and the real environment take precedence
             load_dotenv(path, override=False)
             loaded.append(path)
