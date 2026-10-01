@@ -13,6 +13,10 @@ class Settings:
     WHATSAPP_BUSINESS_ACC_ID = os.getenv("WHATSAPP_BUSINESS_ACC_ID")
     ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    # Conversation model and reasoning effort (GPT-5 series are reasoning
+    # models; "minimal" keeps replies chat-fast while following instructions).
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")
+    OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "minimal")
     TRUST_CHECK_INTERVAL = int(os.getenv("TRUST_CHECK_INTERVAL", "3"))
     # Debrief the participant and end the study conversation after this many
     # user messages in the normal (LLM) phase. The intro and rating replies

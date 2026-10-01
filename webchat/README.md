@@ -89,6 +89,6 @@ own `.env` and otherwise work unchanged, CSV export included.
 
 ## Notes
 
-- The LLM model is whatever `integrations/openai_client.py` uses (currently `gpt-4`), the same as WhatsApp, so the two datasets stay comparable.
+- The LLM model is `OPENAI_MODEL` (default `gpt-5.5`, reasoning effort `OPENAI_REASONING_EFFORT`, default `minimal`), shared with the WhatsApp app through `integrations/openai_client.py`. WhatsApp conversations collected before 2026-10-01 ran on `gpt-4`.
 - One turn per session is processed at a time; the page disables input while a reply is pending.
 - `/health` reports `GIT_COMMIT_SHA` if the systemd unit sets it, so a deploy can be confirmed from outside.

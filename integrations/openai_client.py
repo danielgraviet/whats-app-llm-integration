@@ -19,7 +19,8 @@ async def get_ai_response(messages: list[dict], system_prompt: str) -> str:
     """
 
     response = await client.chat.completions.create(
-        model="gpt-4",
+        model=settings.OPENAI_MODEL,
+        reasoning_effort=settings.OPENAI_REASONING_EFFORT,
         messages=[{"role": "system", "content": system_prompt}] + messages,
     )
 
