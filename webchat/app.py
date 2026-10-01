@@ -88,6 +88,9 @@ def _git_sha() -> str:
 
 GIT_SHA = _git_sha()
 MAX_MESSAGE_CHARS = int(os.getenv("WEBCHAT_MAX_MESSAGE_CHARS", "2000"))
+# Developer commands (/info, /reset, /lang en|pt) work only when the request carries
+# X-Dev-Token equal to this value. Unset = commands are ordinary text for everyone.
+DEV_TOKEN = os.getenv("WEBCHAT_DEV_TOKEN", "")
 
 # Texts used by the page. Everything the participant reads is Portuguese.
 UI_TEXT = {
@@ -194,24 +197,25 @@ def state_of(sid: str) -> dict:
         raise HTTPException(404, "unknown session")
     d = doc.to_dict()
     phase = d.get("conversation_phase", "awaiting_initial_rating")
+    lang = d.get("language") or "PT"
     history = [{"role": m["role"], "content": m["content"]} for m in d.get("history", [])]
     pending_rating = None
     if phase == "awaiting_initial_rating" and d.get("intro_sent"):
-        pending_rating = {"kind": "intro", "prompt": trust_service.get_trust_prompt("PT", "intro")}
+        pending_rating = {"kind": "intro", "prompt": trust_service.get_trust_prompt(lang, "intro")}
     elif phase == "awaiting_check_in_rating":
-        pending_rating = {"kind": "check_in", "prompt": trust_service.get_trust_prompt("PT", "check_in")}
-    return {"session_id": sid, "phase": phase, "ended": phase == "ended", "history": history,
+        pending_rating = {"kind": "check_in", "prompt": trust_service.get_trust_prompt(lang, "check_in")}
+    return {"session_id": sid, "phase": phase, "ended": phase == "ended", "history": history, "language": lang,
             "pending_rating": pending_rating, "user_turn_count": d.get("user_turn_count", 0),
             "ratings": [r.get("score") for r in d.get("feeling_array", [])],
             # so a reload of a finished conversation still shows the debrief (it is not part of history)
-            "debrief": trust_service.get_trust_prompt("PT", "debrief") if phase == "ended" else None}
+            "debrief": trust_service.get_trust_prompt(lang, "debrief") if phase == "ended" else None}
 
 
 def shape(sid: str, bot) -> dict:
     """Turn a BotResponse into what the page renders."""
     out = {"messages": list(bot.text_messages), "rating": None}
     if bot.send_trust_flow:
-        out["rating"] = {"kind": bot.trust_flow_prompt_key, "prompt": trust_service.get_trust_prompt("PT", bot.trust_flow_prompt_key)}
+        out["rating"] = {"kind": bot.trust_flow_prompt_key, "prompt": trust_service.get_trust_prompt(bot.trust_flow_language, bot.trust_flow_prompt_key)}
     st = state_of(sid)
     out.update({"phase": st["phase"], "ended": st["ended"], "user_turn_count": st["user_turn_count"]})
     return out
@@ -231,8 +235,8 @@ def health():
 
 
 @app.get("/api/text")
-def ui_text():
-    return UI_TEXT
+def ui_text(request: Request):
+    return {**UI_TEXT, "dev": is_dev(request)}
 
 
 @app.post("/api/session")
@@ -263,15 +267,30 @@ def get_session(sid: str):
     return state_of(sid)
 
 
+def is_dev(request: Request) -> bool:
+    tok = request.headers.get("x-dev-token", "")
+    return bool(DEV_TOKEN) and bool(tok) and secrets.compare_digest(tok, DEV_TOKEN)
+
+
 @app.post("/api/session/{sid}/message")
 async def post_message(sid: str, body: MessageIn, request: Request):
     st = state_of(sid)
+    dev = is_dev(request)
+    text = body.text.strip()
+    if dev and text.lower().startswith("/"):
+        # Developer command: bypass the phase guards; the shared service handles it.
+        async with lock_for(sid):
+            bot = await conversation_service.handle_incoming_message(
+                CLIENT, sid, text, "text", raw_message=None, contacts=[], allow_dev_commands=True)
+        if text.lower() == "/reset":
+            # the service deleted the document; tell the page to forget the session and reload
+            return {"messages": list(bot.text_messages), "rating": None, "phase": "reset", "ended": False, "user_turn_count": 0, "reset": True}
+        return shape(sid, bot)
     if st["ended"]:
-        return {"messages": [trust_service.get_trust_prompt("PT", "conversation_ended")], "rating": None, "phase": "ended", "ended": True, "user_turn_count": st["user_turn_count"]}
+        return {"messages": [trust_service.get_trust_prompt(st["language"], "conversation_ended")], "rating": None, "phase": "ended", "ended": True, "user_turn_count": st["user_turn_count"]}
     if st["pending_rating"]:
         # WhatsApp would answer "use the button"; on the web the widget is right there, so just re-show it.
         return {"messages": [], "rating": st["pending_rating"], "phase": st["phase"], "ended": False, "user_turn_count": st["user_turn_count"]}
-    text = body.text.strip()
     async with lock_for(sid):
         try:
             bot = await conversation_service.handle_incoming_message(
@@ -326,6 +345,7 @@ def configure():
         log.error("No Firebase credentials: set FIREBASE_CREDS_PATH or FIREBASE_CREDS_JSON in webchat/.env"); sys.exit(2)
     if not os.getenv("OPENAI_API_KEY"):
         log.error("OPENAI_API_KEY is not set in webchat/.env"); sys.exit(2)
+    log.info("developer commands: %s", "enabled with WEBCHAT_DEV_TOKEN (open the page with ?dev=<token>)" if DEV_TOKEN else "disabled (set WEBCHAT_DEV_TOKEN to enable)")
     CLIENT = firebase.init_firestore()
 
 
