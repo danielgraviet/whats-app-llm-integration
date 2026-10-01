@@ -273,8 +273,14 @@ async def post_message(sid: str, body: MessageIn, request: Request):
         return {"messages": [], "rating": st["pending_rating"], "phase": st["phase"], "ended": False, "user_turn_count": st["user_turn_count"]}
     text = body.text.strip()
     async with lock_for(sid):
-        bot = await conversation_service.handle_incoming_message(
-            CLIENT, sid, text, "text", raw_message=build_raw_message(sid, text, "text", None, request), contacts=[], allow_dev_commands=False)
+        try:
+            bot = await conversation_service.handle_incoming_message(
+                CLIENT, sid, text, "text", raw_message=build_raw_message(sid, text, "text", None, request), contacts=[], allow_dev_commands=False)
+        except Exception as e:
+            # Typically the model call (API error, bad parameter, outage). Nothing has been
+            # stored for this turn, so the participant can simply resend.
+            log.error("turn failed for %s: %s: %s", sid, type(e).__name__, str(e)[:300])
+            raise HTTPException(503, UI_TEXT["error"])
     return shape(sid, bot)
 
 
