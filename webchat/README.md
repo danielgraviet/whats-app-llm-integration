@@ -60,11 +60,14 @@ uv pip install --python .venv/bin/python -r webchat/requirements.txt
 
 # 2. secrets: copy the template and fill in Firebase creds + OpenAI key (same values Railway has)
 sudo cp webchat/.env.schema webchat/.env && sudo nano webchat/.env
-sudo chown -R www-data:www-data /opt/whats-app-llm-integration && sudo chmod 600 webchat/.env
+chmod 600 webchat/.env
 
-# 3. service
+# 3. service: set the user and paths to match your checkout (the template assumes
+#    /opt/... owned by www-data; a wrong User shows as "status=217/USER")
 sudo cp webchat/deploy/webchat.service /etc/systemd/system/
+sudo sed -i "s/^User=.*/User=$USER/; s#/opt/whats-app-llm-integration#$PWD#g" /etc/systemd/system/webchat.service
 sudo systemctl daemon-reload && sudo systemctl enable --now webchat
+journalctl -u webchat -n 20 --no-pager        # startup log: env files loaded, collection, any missing key
 curl -s http://127.0.0.1:8100/health          # {"status":"healthy",...,"collection":"web_conversations"}
 
 # 4. nginx: paste webchat/deploy/nginx-pesquisa.conf into the pccgo server block
