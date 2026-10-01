@@ -25,7 +25,8 @@ Portuguese only, phone-first layout in the WhatsApp visual style:
 3. A check-in rating every `TRUST_CHECK_INTERVAL` (3) user messages; input is blocked until they rate, as on WhatsApp.
 4. After `DEBRIEF_AFTER_TURNS` (8) user messages: the reply, then the debriefing text with the TSE links and contact email, then the conversation is closed.
 
-Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage). Typed "/info", "/reset" and "/lang" are ordinary text here.
+Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage). Typed "/info", "/reset" and "/lang" are ordinary text here. To start a fresh
+conversation while testing, open the page with `?new=1` (or use a private window).
 
 ## What is recorded
 
