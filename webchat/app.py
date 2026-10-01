@@ -88,9 +88,12 @@ def _git_sha() -> str:
 
 GIT_SHA = _git_sha()
 MAX_MESSAGE_CHARS = int(os.getenv("WEBCHAT_MAX_MESSAGE_CHARS", "2000"))
-# Developer commands (/info, /reset, /lang en|pt) work only when the request carries
-# X-Dev-Token equal to this value. Unset = commands are ordinary text for everyone.
-DEV_TOKEN = os.getenv("WEBCHAT_DEV_TOKEN", "")
+# Developer commands typed as messages, exactly as on WhatsApp:
+#   /info            condition, phase, turn count, ratings, system prompt
+#   /reset           delete this session's document; the page reloads as a brand-new
+#                    participant (new session id, new random condition)
+#   /lang en|pt      switch prompt language
+DEV_COMMANDS = ("/info", "/reset", "/lang en", "/lang pt")
 
 # Texts used by the page. Everything the participant reads is Portuguese.
 UI_TEXT = {
@@ -235,8 +238,8 @@ def health():
 
 
 @app.get("/api/text")
-def ui_text(request: Request):
-    return {**UI_TEXT, "dev": is_dev(request)}
+def ui_text():
+    return UI_TEXT
 
 
 @app.post("/api/session")
@@ -256,7 +259,7 @@ async def start_session(body: SessionStart, request: Request):
         bot = await conversation_service.handle_incoming_message(
             CLIENT, sid, "[abrir página]", "text",
             raw_message=build_raw_message(sid, "[abrir página]", "text", body, request),
-            contacts=contacts_for(body, sid), allow_dev_commands=False)
+            contacts=contacts_for(body, sid), allow_dev_commands=True)
     st = state_of(sid); st["resumed"] = False; st["intro"] = shape(sid, bot)
     log.info("new session %s variant=%s", sid, CLIENT.collection(firebase.COLLECTION).document(sid).get().to_dict().get("prompt_variant"))
     return st
@@ -267,17 +270,11 @@ def get_session(sid: str):
     return state_of(sid)
 
 
-def is_dev(request: Request) -> bool:
-    tok = request.headers.get("x-dev-token", "")
-    return bool(DEV_TOKEN) and bool(tok) and secrets.compare_digest(tok, DEV_TOKEN)
-
-
 @app.post("/api/session/{sid}/message")
 async def post_message(sid: str, body: MessageIn, request: Request):
     st = state_of(sid)
-    dev = is_dev(request)
     text = body.text.strip()
-    if dev and text.lower().startswith("/"):
+    if text.lower() in DEV_COMMANDS:
         # Developer command: bypass the phase guards; the shared service handles it.
         async with lock_for(sid):
             bot = await conversation_service.handle_incoming_message(
@@ -294,7 +291,7 @@ async def post_message(sid: str, body: MessageIn, request: Request):
     async with lock_for(sid):
         try:
             bot = await conversation_service.handle_incoming_message(
-                CLIENT, sid, text, "text", raw_message=build_raw_message(sid, text, "text", None, request), contacts=[], allow_dev_commands=False)
+                CLIENT, sid, text, "text", raw_message=build_raw_message(sid, text, "text", None, request), contacts=[], allow_dev_commands=True)
         except Exception as e:
             # Typically the model call (API error, bad parameter, outage). Nothing has been
             # stored for this turn, so the participant can simply resend.
@@ -313,7 +310,7 @@ async def post_rating(sid: str, body: RatingIn, request: Request):
     reply_id = f"rating_{body.score}"
     async with lock_for(sid):
         bot = await conversation_service.handle_incoming_message(
-            CLIENT, sid, reply_id, "interactive", raw_message=build_raw_message(sid, reply_id, "interactive", None, request), contacts=[], allow_dev_commands=False)
+            CLIENT, sid, reply_id, "interactive", raw_message=build_raw_message(sid, reply_id, "interactive", None, request), contacts=[], allow_dev_commands=True)
     return shape(sid, bot)
 
 
@@ -345,7 +342,6 @@ def configure():
         log.error("No Firebase credentials: set FIREBASE_CREDS_PATH or FIREBASE_CREDS_JSON in webchat/.env"); sys.exit(2)
     if not os.getenv("OPENAI_API_KEY"):
         log.error("OPENAI_API_KEY is not set in webchat/.env"); sys.exit(2)
-    log.info("developer commands: %s", "enabled with WEBCHAT_DEV_TOKEN (open the page with ?dev=<token>)" if DEV_TOKEN else "disabled (set WEBCHAT_DEV_TOKEN to enable)")
     CLIENT = firebase.init_firestore()
 
 
