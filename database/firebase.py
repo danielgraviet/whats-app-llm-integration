@@ -11,6 +11,11 @@ from . import models
 
 logger = logging.getLogger(__name__)
 
+# Firestore collection holding conversations. The WhatsApp deployment uses the
+# default; the web deployment sets FIRESTORE_COLLECTION=web_conversations so
+# the two studies never share a document store.
+COLLECTION = os.getenv("FIRESTORE_COLLECTION", "conversations")
+
 
 def init_firestore():
     """Initializes the Firestore client using service account credentials.
@@ -53,7 +58,7 @@ def save_message(
         role: Either "user" or "assistant"
     """
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
 
         new_message = models.Message(role=role, content=message_text)
 
@@ -82,7 +87,7 @@ def get_or_create_conversation(
 ) -> models.Conversation:
     # check the database for existing conversation
     # if exists return convo.
-    doc_ref = client.collection("conversations").document(phone_number)
+    doc_ref = client.collection(COLLECTION).document(phone_number)
     doc = doc_ref.get()
 
     if doc.exists:
@@ -113,7 +118,7 @@ def save_trust_rating(
 ) -> bool:
     """Appends a trust rating to the feeling_array in Firestore."""
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
         rating = models.TrustRating(score=score, message_index=message_index)
         doc_ref.set(
             {
@@ -137,7 +142,7 @@ def update_conversation_phase(
 ) -> bool:
     """Updates the conversation phase and optionally the turn count."""
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
         update_data = {
             "conversation_phase": phase,
             "updated_at": dt.datetime.now(),
@@ -158,7 +163,7 @@ def update_conversation_phase(
 def mark_debriefed(client, phone_number: str) -> bool:
     """Moves the conversation to the terminal 'ended' phase and stamps the time."""
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
         now = dt.datetime.now()
         doc_ref.update(
             {"conversation_phase": "ended", "debriefed_at": now, "updated_at": now}
@@ -172,7 +177,7 @@ def mark_debriefed(client, phone_number: str) -> bool:
 def update_intro_sent(client, phone_number: str) -> bool:
     """Marks the intro as sent for this conversation."""
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
         doc_ref.update({"intro_sent": True, "updated_at": dt.datetime.now()})
         return True
     except Exception:
@@ -183,7 +188,7 @@ def update_intro_sent(client, phone_number: str) -> bool:
 def save_pending_response(client, phone_number: str, ai_response: str) -> bool:
     """Stores an AI response to send after the user completes a check-in rating."""
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
         doc_ref.update(
             {"pending_ai_response": ai_response, "updated_at": dt.datetime.now()}
         )
@@ -200,7 +205,7 @@ def get_and_clear_pending_response(client, phone_number: str) -> str:
     both read the value before either clears it, preventing double-delivery.
     """
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
 
         @firestore.transactional
         def _txn(transaction, doc_ref):
@@ -262,7 +267,7 @@ def record_metadata(
             return True
 
         update["updated_at"] = dt.datetime.now()
-        client.collection("conversations").document(phone_number).set(
+        client.collection(COLLECTION).document(phone_number).set(
             update, merge=True
         )
         return True
@@ -274,7 +279,7 @@ def record_metadata(
 def update_language(client, phone_number: str, language: str, prompt_variant: str) -> bool:
     """Updates the language and corresponding prompt variant for a conversation."""
     try:
-        doc_ref = client.collection("conversations").document(phone_number)
+        doc_ref = client.collection(COLLECTION).document(phone_number)
         doc_ref.update(
             {
                 "language": language,
@@ -290,7 +295,7 @@ def update_language(client, phone_number: str, language: str, prompt_variant: st
 
 def delete_conversation(client, phone_number: str) -> bool:
     try:
-        client.collection("conversations").document(phone_number).delete()
+        client.collection(COLLECTION).document(phone_number).delete()
         return True
     except Exception:
         logger.exception("Error deleting conversation for phone_number=%s", phone_number)

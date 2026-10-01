@@ -255,7 +255,7 @@ def set_watermark(cur, ts: dt.datetime) -> None:
 # one tick
 # ----------------------------------------------------------------------------
 def fetch_changed_docs(fs_client, since: dt.datetime | None):
-    coll = fs_client.collection("conversations")
+    coll = fs_client.collection(firebase.COLLECTION)
     if since is None:
         return list(coll.stream())
     q = coll.where(filter=FieldFilter("updated_at", ">", since - WATERMARK_SLACK))

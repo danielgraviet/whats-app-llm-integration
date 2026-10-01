@@ -322,7 +322,8 @@ class FirestoreSource:
 
     def load(self, since: dt.datetime | None) -> list[tuple[str, dict]]:
         from google.cloud.firestore_v1.base_query import FieldFilter
-        coll = self.client.collection("conversations")
+        from database import firebase as _fb
+        coll = self.client.collection(_fb.COLLECTION)
         q = coll if since is None else coll.where(filter=FieldFilter("updated_at", ">", since - dt.timedelta(seconds=5)))
         return [(doc.id, doc.to_dict() or {}) for doc in q.stream()]
 

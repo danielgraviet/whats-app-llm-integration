@@ -98,7 +98,7 @@ def main():
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     out_dir = ROOT / "backups"; out_dir.mkdir(exist_ok=True)
 
-    docs = {doc.id: (doc.to_dict() or {}) for doc in client.collection("conversations").stream()}
+    docs = {doc.id: (doc.to_dict() or {}) for doc in client.collection(firebase.COLLECTION).stream()}
     print(f"{len(docs)} conversations in Firestore; cutoff = updated_at < {cutoff.isoformat()} ({args.older_than_hours:g} h ago)")
 
     stale = {i: d for i, d in docs.items() if (_utc(d.get("updated_at")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) < cutoff}
@@ -132,7 +132,7 @@ def main():
     backup.write_text(json.dumps({"backed_up_at": now.isoformat(), "documents": {i: jsonable(docs[i]) for i in to_delete}}, indent=2, ensure_ascii=False))
     print(f"backed up {len(to_delete)} document(s) to {backup.relative_to(ROOT)} ({backup.stat().st_size:,} bytes)")
 
-    coll = client.collection("conversations")
+    coll = client.collection(firebase.COLLECTION)
     done = 0
     for k in range(0, len(to_delete), 400):
         batch = client.batch()

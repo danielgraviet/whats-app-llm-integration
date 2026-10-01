@@ -38,8 +38,12 @@ async def handle_incoming_message(
     msg_type: str,
     raw_message: dict | None = None,
     contacts: list | None = None,
+    allow_dev_commands: bool = True,
 ) -> BotResponse:
     """Main entry point. Routes to the correct handler based on conversation phase.
+
+    allow_dev_commands=False (web deployment) treats "/info", "/reset" and
+    "/lang" as ordinary participant text instead of developer commands.
 
     raw_message / contacts are the untouched webhook objects from Meta. They are
     stored on the conversation for research metadata (see firebase.record_metadata).
@@ -63,7 +67,7 @@ async def handle_incoming_message(
         )
 
     # Dev commands — bypass all state logic
-    if message_text.strip().lower() == "/info":
+    if allow_dev_commands and message_text.strip().lower() == "/info":
         belief = _initial_belief_level(conversation)
         system_prompt = prompt_service.get_prompt(
             language=conversation.language,
@@ -84,7 +88,7 @@ async def handle_incoming_message(
         )
         return BotResponse(text_messages=[info_text])
 
-    if message_text.strip().lower() == "/reset":
+    if allow_dev_commands and message_text.strip().lower() == "/reset":
         result = firebase.delete_conversation(client, phone_number)
         if result:
             return_msg = "User data has been reset. Please clear your chat and restart."
@@ -93,7 +97,7 @@ async def handle_incoming_message(
         return BotResponse(text_messages=[return_msg])
 
     lang_cmd = message_text.strip().lower()
-    if lang_cmd in ("/lang en", "/lang pt"):
+    if allow_dev_commands and lang_cmd in ("/lang en", "/lang pt"):
         new_lang = "EN" if lang_cmd == "/lang en" else "PT"
         base = conversation.prompt_variant.split("_prompt_", 1)[1]
         new_variant = f"{new_lang}_prompt_{base}"
