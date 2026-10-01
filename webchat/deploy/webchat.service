@@ -7,10 +7,10 @@ Description=Urnas study web chat (webchat/app.py)
 After=network.target
 
 [Service]
-User=www-data
-WorkingDirectory=/opt/whats-app-llm-integration
+User=remote
+WorkingDirectory=/home/remote/whats-app-llm-integration
 Environment=GIT_COMMIT_SHA=
-ExecStart=/opt/whats-app-llm-integration/.venv/bin/python webchat/app.py
+ExecStart=/home/remote/whats-app-llm-integration/.venv/bin/python webchat/app.py
 Restart=always
 RestartSec=3
 
