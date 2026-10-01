@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2
+python-dotenv>=1.0.0
+google-cloud-firestore>=2.23.0
+google-auth>=2.48.0
+openai>=1.70
+httpx>=0.28

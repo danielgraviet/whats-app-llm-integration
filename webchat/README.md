@@ -1,0 +1,77 @@
+# Web version of the study conversation
+
+A browser-based replacement for the WhatsApp bot, built for the case where
+the WhatsApp number is unavailable. It reuses the WhatsApp deployment's
+conversation logic, prompts, texts, and Firestore document format unchanged,
+so every downstream tool (Grafana dashboard, conversation browser, CSV export,
+purge script) works on the new data with one environment variable.
+
+```
+Facebook ad ─► https://pccgo.cs.byu.edu/pesquisa/?utm_campaign=…&utm_content=ad_17
+                      │ nginx (TLS, already in place)
+                      ▼
+               webchat/app.py  (127.0.0.1:8100)
+                      │  services/conversation_service.py  ← same code as WhatsApp
+                      ├─► OpenAI (same key, same prompts in prompt/pt/)
+                      └─► Firestore collection  web_conversations   ← separate from "conversations"
+```
+
+## What the participant sees
+
+Portuguese only, phone-first layout in the WhatsApp visual style:
+
+1. Intro text with the study sponsor, ethics approval and consent language (the same `intro` text as WhatsApp), then a 1 to 10 trust-rating widget replacing the WhatsApp "Avaliar agora" flow.
+2. The LLM conversation under one of the five randomly assigned prompt conditions.
+3. A check-in rating every `TRUST_CHECK_INTERVAL` (3) user messages; input is blocked until they rate, as on WhatsApp.
+4. After `DEBRIEF_AFTER_TURNS` (8) user messages: the reply, then the debriefing text with the TSE links and contact email, then the conversation is closed.
+
+Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage). Typed "/info", "/reset" and "/lang" are ordinary text here.
+
+## What is recorded
+
+Same document shape as WhatsApp, in collection `web_conversations`, keyed by a random session id (`web_…`) instead of a phone number:
+
+- history, phase, variant, turn count, ratings, debriefed_at (identical fields)
+- `first_message_raw.referral`: built from the ad URL. `source_id` = `utm_content` (fall back `ad_id`, `utm_campaign`), `ctwa_clid` = `fbclid`, plus every `utm_*` / `fbclid` / `gclid` / `ad_id` / `adset_id` / `campaign_id` parameter under `params`
+- `first_message_raw.web`: full query string, referrer, user agent, browser language, Accept-Language, screen size, timezone, page URL, and a salted hash of the IP (never the IP itself)
+
+**Ad setup:** give every ad a distinct `utm_content` (e.g. `ad_17`) in its destination URL. Facebook adds `fbclid` on its own. There is no server-side click attribution on the web like WhatsApp's referral object, so the URL parameters are the only attribution.
+
+## Install on pccgo.cs.byu.edu
+
+```bash
+# 1. code + venv
+sudo git clone https://github.com/danielgraviet/whats-app-llm-integration.git /opt/whats-app-llm-integration
+cd /opt/whats-app-llm-integration
+sudo python3 -m venv .venv && sudo .venv/bin/pip install -r webchat/requirements.txt
+
+# 2. secrets: copy the template and fill in Firebase creds + OpenAI key (same values Railway has)
+sudo cp webchat/.env.schema webchat/.env && sudo nano webchat/.env
+sudo chown -R www-data:www-data /opt/whats-app-llm-integration && sudo chmod 600 webchat/.env
+
+# 3. service
+sudo cp webchat/deploy/webchat.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now webchat
+curl -s http://127.0.0.1:8100/health          # {"status":"healthy",...,"collection":"web_conversations"}
+
+# 4. nginx: paste webchat/deploy/nginx-pesquisa.conf into the pccgo server block
+sudo nginx -t && sudo systemctl reload nginx
+curl -s https://pccgo.cs.byu.edu/pesquisa/health
+```
+
+Updating later: `git pull`, then `sudo systemctl restart webchat`.
+
+To try it without any credentials: `python webchat/app.py --demo --port 8100` and open http://127.0.0.1:8100/ (in-memory store, canned replies, nothing saved).
+
+## Dashboard, browser and export for the web data
+
+The Grafana stack gains a second database and dashboard ("Web Study"); see
+`dashboard/README.md`, section "Second study (web)". The conversation browser
+and the purge script take `FIRESTORE_COLLECTION=web_conversations` in their
+own `.env` and otherwise work unchanged, CSV export included.
+
+## Notes
+
+- The LLM model is whatever `integrations/openai_client.py` uses (currently `gpt-4`), the same as WhatsApp, so the two datasets stay comparable.
+- One turn per session is processed at a time; the page disables input while a reply is pending.
+- `/health` reports `GIT_COMMIT_SHA` if the systemd unit sets it, so a deploy can be confirmed from outside.

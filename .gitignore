@@ -2,7 +2,9 @@
 .env.*
 !.env.schema
 !dashboard/.env.schema
+!dashboard/.env.web.schema
 !browser/.env.schema
+!webchat/.env.schema
 *.json
 !package.json
 __pycache__/
