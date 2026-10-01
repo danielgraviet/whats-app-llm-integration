@@ -11,6 +11,12 @@ from . import models
 
 logger = logging.getLogger(__name__)
 
+def _now() -> dt.datetime:
+    """Timezone-aware UTC. Firestore treats naive datetimes as UTC, so a naive
+    local now() on a non-UTC server (e.g. Mountain time) is stored hours off."""
+    return dt.datetime.now(dt.timezone.utc)
+
+
 # Firestore collection holding conversations. The WhatsApp deployment uses the
 # default; the web deployment sets FIRESTORE_COLLECTION=web_conversations so
 # the two studies never share a document store.
@@ -65,7 +71,7 @@ def save_message(
         doc_ref.set(
             {
                 "last_message": message_text,
-                "updated_at": dt.datetime.now(),
+                "updated_at": _now(),
                 "history": firestore.ArrayUnion([new_message.model_dump()]),
             },
             merge=True,
@@ -123,7 +129,7 @@ def save_trust_rating(
         doc_ref.set(
             {
                 "feeling_array": firestore.ArrayUnion([rating.model_dump()]),
-                "updated_at": dt.datetime.now(),
+                "updated_at": _now(),
             },
             merge=True,
         )
@@ -145,7 +151,7 @@ def update_conversation_phase(
         doc_ref = client.collection(COLLECTION).document(phone_number)
         update_data = {
             "conversation_phase": phase,
-            "updated_at": dt.datetime.now(),
+            "updated_at": _now(),
         }
         if user_turn_count is not None:
             update_data["user_turn_count"] = user_turn_count
@@ -164,7 +170,7 @@ def mark_debriefed(client, phone_number: str) -> bool:
     """Moves the conversation to the terminal 'ended' phase and stamps the time."""
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
-        now = dt.datetime.now()
+        now = _now()
         doc_ref.update(
             {"conversation_phase": "ended", "debriefed_at": now, "updated_at": now}
         )
@@ -178,7 +184,7 @@ def update_intro_sent(client, phone_number: str) -> bool:
     """Marks the intro as sent for this conversation."""
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
-        doc_ref.update({"intro_sent": True, "updated_at": dt.datetime.now()})
+        doc_ref.update({"intro_sent": True, "updated_at": _now()})
         return True
     except Exception:
         logger.exception("Error updating intro_sent for phone_number=%s", phone_number)
@@ -190,7 +196,7 @@ def save_pending_response(client, phone_number: str, ai_response: str) -> bool:
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
         doc_ref.update(
-            {"pending_ai_response": ai_response, "updated_at": dt.datetime.now()}
+            {"pending_ai_response": ai_response, "updated_at": _now()}
         )
         return True
     except Exception:
@@ -215,7 +221,7 @@ def get_and_clear_pending_response(client, phone_number: str) -> str:
             pending = doc.to_dict().get("pending_ai_response", "")
             transaction.update(
                 doc_ref,
-                {"pending_ai_response": "", "updated_at": dt.datetime.now()},
+                {"pending_ai_response": "", "updated_at": _now()},
             )
             return pending
 
@@ -266,7 +272,7 @@ def record_metadata(
         if not update:
             return True
 
-        update["updated_at"] = dt.datetime.now()
+        update["updated_at"] = _now()
         client.collection(COLLECTION).document(phone_number).set(
             update, merge=True
         )
@@ -284,7 +290,7 @@ def update_language(client, phone_number: str, language: str, prompt_variant: st
             {
                 "language": language,
                 "prompt_variant": prompt_variant,
-                "updated_at": dt.datetime.now(),
+                "updated_at": _now(),
             }
         )
         return True
