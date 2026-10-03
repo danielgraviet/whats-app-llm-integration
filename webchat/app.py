@@ -61,6 +61,12 @@ def load_env_files() -> list[Path]:
 
 _LOADED = load_env_files()
 os.environ.setdefault("FIRESTORE_COLLECTION", "web_conversations")   # never the WhatsApp collection by default
+# Study parameters for the web deployment (override in webchat/.env):
+os.environ.setdefault("TRUST_RATING_MIN", "0")          # slider scale
+os.environ.setdefault("TRUST_RATING_MAX", "100")
+os.environ.setdefault("TRUST_CHECK_INTERVAL", "6")      # rating after every 6 user turns
+os.environ.setdefault("DEBRIEF_AFTER_TURNS", "6")       # debrief after turn 6 (control: 12), then keep talking
+os.environ.setdefault("CONTINUE_AFTER_DEBRIEF", "true")
 sys.path.insert(0, str(PROJECT_ROOT))
 
 DEMO = "--demo" in sys.argv or os.getenv("WEBCHAT_DEMO", "").lower() in ("1", "true")
@@ -69,6 +75,7 @@ if DEMO:
     install_transactional_shim()
     os.environ.setdefault("OPENAI_API_KEY", "demo")   # the OpenAI client is built at import time; never called in demo
 
+from config import settings  # noqa: E402
 from database import firebase  # noqa: E402
 from services import conversation_service, trust_service  # noqa: E402
 from integrations import openai_client  # noqa: E402
@@ -105,7 +112,9 @@ UI_TEXT = {
     "rate_title": "Qual é o seu grau de confiança nas urnas eletrônicas do Brasil?",
     "rate_low": "Nenhuma confiança",
     "rate_high": "Confiança total",
+    "rate_hint": "Mova o controle para registrar sua resposta",
     "rate_confirm": "Avaliar agora",
+    "rate_pending": "Por favor, responda à avaliação acima antes de continuar.",
     "typing": "digitando…",
     "ended": "Esta conversa foi encerrada. Obrigado por participar.",
     "error": "Desculpe, ocorreu um erro. Tente novamente em instantes.",
@@ -133,7 +142,7 @@ class MessageIn(BaseModel):
 
 
 class RatingIn(BaseModel):
-    score: int = Field(ge=1, le=10)
+    score: int = Field(ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
 
 
 # ----------------------------------------------------------------------------
@@ -194,6 +203,15 @@ def contacts_for(meta: SessionStart | None, sid: str) -> list:
 # ----------------------------------------------------------------------------
 # response shaping
 # ----------------------------------------------------------------------------
+def web_text(lang: str, key: str) -> str:
+    """Shared study texts, with WhatsApp-specific wording adapted to the slider."""
+    t = trust_service.get_trust_prompt(lang, key)
+    return (t.replace("Use o botão 'Avaliar Agora' abaixo para atualizar sua pontuação.", "Mova o controle abaixo para atualizar sua pontuação.")
+             .replace("Use the 'Rate Now' button below to update your score.", "Move the slider below to update your score.")
+             .replace("clique no botão abaixo para responder uma pergunta rápida.", "use o controle abaixo para responder uma pergunta rápida.")
+             .replace("please tap the button below to answer one quick question.", "please use the slider below to answer one quick question."))
+
+
 def state_of(sid: str) -> dict:
     doc = CLIENT.collection(firebase.COLLECTION).document(sid).get()
     if not doc.exists:
@@ -204,21 +222,22 @@ def state_of(sid: str) -> dict:
     history = [{"role": m["role"], "content": m["content"]} for m in d.get("history", [])]
     pending_rating = None
     if phase == "awaiting_initial_rating" and d.get("intro_sent"):
-        pending_rating = {"kind": "intro", "prompt": trust_service.get_trust_prompt(lang, "intro")}
+        pending_rating = {"kind": "intro", "prompt": web_text(lang, "intro")}
     elif phase == "awaiting_check_in_rating":
-        pending_rating = {"kind": "check_in", "prompt": trust_service.get_trust_prompt(lang, "check_in")}
+        pending_rating = {"kind": "check_in", "prompt": web_text(lang, "check_in")}
     return {"session_id": sid, "phase": phase, "ended": phase == "ended", "history": history, "language": lang,
             "pending_rating": pending_rating, "user_turn_count": d.get("user_turn_count", 0),
             "ratings": [r.get("score") for r in d.get("feeling_array", [])],
             # so a reload of a finished conversation still shows the debrief (it is not part of history)
-            "debrief": trust_service.get_trust_prompt(lang, "debrief") if phase == "ended" else None}
+            "debrief": trust_service.get_trust_prompt(lang, "debrief") if phase == "ended" else None,
+            "debriefed": bool(d.get("debriefed_at"))}
 
 
 def shape(sid: str, bot) -> dict:
     """Turn a BotResponse into what the page renders."""
     out = {"messages": list(bot.text_messages), "rating": None}
     if bot.send_trust_flow:
-        out["rating"] = {"kind": bot.trust_flow_prompt_key, "prompt": trust_service.get_trust_prompt(bot.trust_flow_language, bot.trust_flow_prompt_key)}
+        out["rating"] = {"kind": bot.trust_flow_prompt_key, "prompt": web_text(bot.trust_flow_language, bot.trust_flow_prompt_key)}
     st = state_of(sid)
     out.update({"phase": st["phase"], "ended": st["ended"], "user_turn_count": st["user_turn_count"]})
     return out
@@ -234,12 +253,14 @@ def index():
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
-    return {"status": "healthy", "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION}
+    return {"status": "healthy", "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION,
+            "rating_scale": [settings.TRUST_RATING_MIN, settings.TRUST_RATING_MAX], "check_in_interval": settings.TRUST_CHECK_INTERVAL,
+            "debrief_after_turns": settings.DEBRIEF_AFTER_TURNS, "continue_after_debrief": settings.CONTINUE_AFTER_DEBRIEF}
 
 
 @app.get("/api/text")
 def ui_text():
-    return UI_TEXT
+    return {**UI_TEXT, "rating_min": settings.TRUST_RATING_MIN, "rating_max": settings.TRUST_RATING_MAX}
 
 
 @app.post("/api/session")

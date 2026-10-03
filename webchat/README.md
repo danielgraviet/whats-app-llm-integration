@@ -20,23 +20,32 @@ Facebook ad ─► https://pccgo.cs.byu.edu/pesquisa/?utm_campaign=…&utm_conte
 
 Portuguese only, phone-first layout in the WhatsApp visual style:
 
-1. Intro text with the study sponsor, ethics approval and consent language (the same `intro` text as WhatsApp), then a 1 to 10 trust-rating widget replacing the WhatsApp "Avaliar agora" flow.
+1. Intro text with the study sponsor, ethics approval and consent language, then a **0 to 100 trust-rating slider**. The slider starts in the middle, greyed out; nothing is recorded until the participant moves it and taps "Avaliar agora". Ordinary text is refused with a note until the rating is given.
 2. The LLM conversation under one of the five randomly assigned prompt conditions.
-3. A check-in rating every `TRUST_CHECK_INTERVAL` (3) user messages; input is blocked until they rate, as on WhatsApp.
-4. After `DEBRIEF_AFTER_TURNS` (8) user messages: the reply, then the debriefing text with the TSE links and contact email, then the conversation is closed.
+3. After every `TRUST_CHECK_INTERVAL` (6) user messages, the same slider again. The second rating is the **post** measurement; the first is **pre**. Both are stored as plain fields (`rating_pre`, `rating_post`) on the document; every rating also stays in `feeling_array`.
+4. After the rating at turn `DEBRIEF_AFTER_TURNS` (6), the debriefing text with the TSE links, worded to say the participant may keep talking. The conversation then simply continues, with the slider again every 6 turns (12, 18, ...). Nothing ends it except closing the page.
 
-Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage). The WhatsApp developer commands work the same way here, typed as messages:
-`/info` shows the condition, phase, turn count, ratings and system prompt;
+**Control condition (`A_control_condition`)** is a two-stage conversation: after the pre rating the assistant says it will talk about elections later and first chats about cats and dogs (its own prompt, no election content) for 6 turns; the post rating follows; then "Agora vamos falar sobre eleições" and a neutral conversation about elections in general under a second prompt (`A2_control_elections`). Its debrief comes after the rating at turn 12, so every condition sees the debrief after six election turns. Pre and post are therefore comparable across all five conditions.
+
+Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage).
+
+The WhatsApp developer commands work the same way here, typed as messages:
+`/info` shows the condition, phase, turn count, pre/post ratings and system prompt;
 `/reset` deletes the session from Firestore and reloads the page as a brand
 new participant (new session id, fresh random condition); `/lang en` or
 `/lang pt` switches the prompt language. `?new=1` on the URL also starts a
 fresh session.
 
+These are the web deployment's defaults, set in `webchat/app.py` and
+overridable in `webchat/.env`: `TRUST_RATING_MIN=0`, `TRUST_RATING_MAX=100`,
+`TRUST_CHECK_INTERVAL=6`, `DEBRIEF_AFTER_TURNS=6`, `CONTINUE_AFTER_DEBRIEF=true`.
+The WhatsApp app keeps its own defaults (1-10, debrief ends the conversation).
+
 ## What is recorded
 
 Same document shape as WhatsApp, in collection `web_conversations`, keyed by a random session id (`web_…`) instead of a phone number:
 
-- history, phase, variant, turn count, ratings, debriefed_at (identical fields)
+- history, phase, variant, turn count, ratings, debriefed_at (identical fields), plus `rating_pre` and `rating_post`
 - `first_message_raw.referral`: built from the ad URL. `source_id` = `utm_content` (fall back `ad_id`, `utm_campaign`), `ctwa_clid` = `fbclid`, plus every `utm_*` / `fbclid` / `gclid` / `ad_id` / `adset_id` / `campaign_id` parameter under `params`
 - `first_message_raw.web`: full query string, referrer, user agent, browser language, Accept-Language, screen size, timezone, page URL, and a salted hash of the IP (never the IP itself)
 

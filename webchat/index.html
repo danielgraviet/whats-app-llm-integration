@@ -28,10 +28,21 @@
   @keyframes blink { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
   .rate { background: #fff; border-radius: 8px; padding: 10px 12px; margin: 6px 0; box-shadow: 0 1px .5px rgba(0,0,0,.13); max-width: 92%; }
   .rate .q { font-weight: 600; margin-bottom: 8px; font-size: 15px; }
-  .rate .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-  .rate .scale button { padding: 12px 0; border: 1px solid var(--line); border-radius: 8px; background: #f7f8fa; font-size: 17px; font-weight: 600; color: var(--text); cursor: pointer; }
-  .rate .scale button:active, .rate .scale button.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .rate .labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin: 6px 2px 0; }
+  .rate .value { text-align: center; font-size: 34px; font-weight: 700; color: #9aa4ab; margin: 2px 0 4px; min-height: 42px; transition: color .15s; }
+  .rate.touched .value { color: var(--accent-dark); }
+  .rate .hint { text-align: center; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; min-height: 16px; }
+  .rate.touched .hint { visibility: hidden; }
+  .rate input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; background: transparent; margin: 0; touch-action: pan-y; }
+  .rate input[type=range]:focus { outline: none; }
+  .rate input[type=range]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: #d6dadd; }
+  .rate input[type=range]::-moz-range-track { height: 10px; border-radius: 5px; background: #d6dadd; }
+  .rate input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 34px; height: 34px; margin-top: -12px; border-radius: 50%; background: #b8bfc5; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+  .rate input[type=range]::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: #b8bfc5; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+  .rate.touched input[type=range]::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--accent) var(--pct), #d6dadd var(--pct)); }
+  .rate.touched input[type=range]::-moz-range-progress { height: 10px; border-radius: 5px; background: var(--accent); }
+  .rate.touched input[type=range]::-webkit-slider-thumb { background: var(--accent-dark); }
+  .rate.touched input[type=range]::-moz-range-thumb { background: var(--accent-dark); }
+  .rate .labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin: 2px 2px 0; }
   .rate .confirm { margin-top: 10px; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: var(--accent-dark); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
   .rate .confirm:disabled { opacity: .45; }
   .rate.done { opacity: .6; pointer-events: none; }
@@ -79,20 +90,26 @@
     if (!on && typingEl) { typingEl.remove(); typingEl = null; } };
   const setInput = (enabled) => { input.disabled = false; send.disabled = false; if (enabled) input.focus({ preventScroll: true }); };
 
-  // ---------- rating widget (replaces WhatsApp's "Avaliar agora" flow) ----------
+  // ---------- rating widget: a slider that starts greyed out in the middle; nothing is
+  // recorded until the participant moves it and confirms ----------
   function showRating(r) {
     pendingRating = r;
+    const lo = T.rating_min ?? 0, hi = T.rating_max ?? 100, mid = Math.round((lo + hi) / 2);
     const box = document.createElement("div"); box.className = "rate";
-    box.innerHTML = `<div class="q">${T.rate_title}</div><div class="scale"></div><div class="labels"><span>1 = ${T.rate_low}</span><span>10 = ${T.rate_high}</span></div><button class="confirm" disabled>${T.rate_confirm}</button>`;
-    const scale = box.querySelector(".scale"), confirm = box.querySelector(".confirm"); let chosen = null;
-    for (let i = 1; i <= 10; i++) { const b = document.createElement("button"); b.type = "button"; b.textContent = i;
-      b.addEventListener("click", () => { chosen = i; scale.querySelectorAll("button").forEach((x) => x.classList.toggle("sel", x === b)); confirm.disabled = false; }); scale.append(b); }
+    box.innerHTML = `<div class="q">${T.rate_title}</div><div class="value">—</div><div class="hint">${T.rate_hint}</div>
+      <input type="range" min="${lo}" max="${hi}" step="1" value="${mid}" aria-label="${T.rate_title}">
+      <div class="labels"><span>${lo} = ${T.rate_low}</span><span>${hi} = ${T.rate_high}</span></div>
+      <button class="confirm" disabled>${T.rate_confirm}</button>`;
+    const range = box.querySelector("input"), value = box.querySelector(".value"), confirm = box.querySelector(".confirm"); let chosen = null;
+    const paint = () => { const v = +range.value; value.textContent = v; box.style.setProperty("--pct", `${((v - lo) / (hi - lo)) * 100}%`); };
+    const touch = () => { if (chosen == null) { box.classList.add("touched"); confirm.disabled = false; } chosen = +range.value; paint(); };
+    range.addEventListener("input", touch); range.addEventListener("change", touch);
     confirm.addEventListener("click", async () => {
-      if (chosen == null || busy) return; busy = true; box.classList.add("done"); confirm.textContent = `${T.rate_confirm} ✓`;
+      if (chosen == null || busy) return; busy = true; box.classList.add("done"); range.disabled = true; confirm.textContent = `${T.rate_confirm} ✓`;
       bubble(String(chosen), "me"); pendingRating = null;
       await turn(() => api(`api/session/${sid}/rating`, { score: chosen }));
     });
-    chat.append(box); scroll(); setInput(false);
+    chat.append(box); scroll();
   }
 
   // ---------- one turn: render whatever the server returns ----------
@@ -115,7 +132,11 @@
 
   // ---------- sending text ----------
   form.addEventListener("submit", async (e) => {
-    e.preventDefault(); const text = input.value.trim(); if (!text || busy) return;   // the server decides what a message means in the current phase
+    e.preventDefault(); const text = input.value.trim(); if (!text || busy) return;
+    if (pendingRating && !text.startsWith("/")) {   // the conversation cannot proceed until the rating is given
+      const open = [...document.querySelectorAll(".rate")].find((w) => !w.classList.contains("done")); if (open) open.scrollIntoView({ behavior: "smooth", block: "center" });
+      sysNote(T.rate_pending); return;
+    }
     input.value = ""; input.style.height = "auto"; bubble(text, "me");
     await turn(() => api(`api/session/${sid}/message`, { text }));
   });
