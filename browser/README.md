@@ -109,7 +109,7 @@ All endpoints require the same Basic auth as the page.
 | state | `phase`, `outcome`, `intro_sent` |
 | timeline | `started_at`, `first_message_at`, `last_user_msg_at`, `last_assistant_msg_at`, `last_activity_at`, `debriefed_at`, `duration_min` |
 | volume | `user_turn_count`, `n_messages`, `n_user_messages`, `n_assistant_messages`, `n_chars`, `user_chars`, `assistant_chars`, `avg_user_msg_chars`, `avg_assistant_msg_chars` |
-| ratings | `n_ratings`, `initial_rating`, `latest_rating`, `rating_change`, `ratings` (compact `turn:score;...`), `ratings_json` |
+| ratings | `rating_pre`, `rating_post`, `rating_change` (post − pre, the primary outcome), `n_ratings`, `n_later_ratings`, `later_ratings_json` (third and later ratings), then `initial_rating`, `latest_rating`, `ratings` (compact `turn:score;...`), `ratings_json`, `debriefed` |
 | ad attribution | `ad_source_id`, `ad_source_type`, `ad_source_url`, `ad_headline`, `ad_body`, `ad_media_type`, `ctwa_clid`, `n_referrals`, `first_message_id`, `first_message_type` |
 | JSON blobs | `referral_json` (the original referral object), `all_referrals_json`, `first_message_raw_json`, `transcript_json` (list of `{index, role, content, timestamp}`) |
 | other | `pending_ai_response` |

@@ -122,7 +122,7 @@ closed terminal; it reconnects to Postgres on error and logs every tick.
 
 | Table | Grain | Notes |
 |---|---|---|
-| `wa_conversations` | one row per participant | Upserted on every change. Phase, variant, timestamps, turn count, initial and latest rating, first ad referral |
+| `wa_conversations` | one row per participant | Upserted on every change. Phase, variant, timestamps, turn count, `rating_pre` / `rating_post` (primary outcome), `later_ratings` (JSON), first ad referral |
 | `wa_messages` | one row per stored message | Hypertable on `ts`. Role and length only, no content |
 | `wa_ratings` | one row per trust rating | Hypertable on `ts` |
 | `rt_metrics` | one row per poll tick | Hypertable. Active counts, phase counts, hourly starts and debriefs. Zeros are recorded |

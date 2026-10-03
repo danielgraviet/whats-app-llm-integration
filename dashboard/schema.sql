@@ -24,12 +24,19 @@ CREATE TABLE IF NOT EXISTS wa_conversations (
     n_ratings            INTEGER,
     initial_rating       INTEGER,
     latest_rating        INTEGER,
+    rating_pre           INTEGER,         -- before the conversation (primary outcome, first value)
+    rating_post          INTEGER,         -- after the first check-in (primary outcome, second value)
+    later_ratings        JSONB,           -- any ratings after those two: [{message_index, score, ts}]
     n_referrals          INTEGER,
     ad_source_id         TEXT,            -- first referral's ad id
     ad_source_type       TEXT,
     ctwa_clid            TEXT,            -- first referral's click id
     synced_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Existing installs: add the newer columns without recreating the table.
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_pre INTEGER;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_post INTEGER;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS later_ratings JSONB;
 CREATE INDEX IF NOT EXISTS wa_conversations_started_idx   ON wa_conversations (started_at);
 CREATE INDEX IF NOT EXISTS wa_conversations_debriefed_idx ON wa_conversations (debriefed_at);
 CREATE INDEX IF NOT EXISTS wa_conversations_phase_idx     ON wa_conversations (phase);

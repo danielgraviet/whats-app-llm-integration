@@ -136,8 +136,8 @@ def _jsonable(v: Any) -> Any:
     return v
 
 
-def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, now: dt.datetime) -> str:
-    if phase == "ended":
+def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, now: dt.datetime, debriefed: bool = False) -> str:
+    if phase == "ended" or debriefed:
         return "completed"
     if not intro_sent or phase == "awaiting_initial_rating":
         return "never rated"
@@ -156,8 +156,10 @@ CSV_COLUMNS = [
     # volume
     "user_turn_count", "n_messages", "n_user_messages", "n_assistant_messages",
     "n_chars", "user_chars", "assistant_chars", "avg_user_msg_chars", "avg_assistant_msg_chars",
-    # trust ratings
-    "n_ratings", "initial_rating", "latest_rating", "rating_change", "ratings", "ratings_json",
+    # trust ratings: pre (before the conversation) and post (after the first check-in) are the
+    # primary outcome; later_ratings_json holds any ratings after those two
+    "rating_pre", "rating_post", "rating_change", "n_ratings", "n_later_ratings", "later_ratings_json",
+    "initial_rating", "latest_rating", "ratings", "ratings_json", "debriefed",
     # ad attribution
     "ad_source_id", "ad_source_type", "ad_source_url", "ad_headline", "ad_body", "ad_media_type", "ctwa_clid", "n_referrals",
     "first_message_id", "first_message_type",
@@ -195,6 +197,14 @@ class Conv:
         self.started_at = _utc(raw_first.get("timestamp")) or (_utc(min(msg_ts)) if msg_ts else _utc(d.get("updated_at")))
         self.last_activity_at = _utc(d.get("updated_at"))
         self.debriefed_at = _utc(d.get("debriefed_at"))
+        # pre/post as stored by the app; older documents fall back to positions in the ratings list
+        self.rating_pre = d.get("rating_pre")
+        self.rating_post = d.get("rating_post")
+        if self.rating_pre is None and self.ratings:
+            self.rating_pre = next((r["score"] for r in self.ratings if r["message_index"] == 0), self.ratings[0]["score"])
+        if self.rating_post is None and len(self.ratings) >= 2:
+            self.rating_post = self.ratings[1]["score"]
+        self.later_ratings = self.ratings[2:]
         self.phase = d.get("conversation_phase") or "unknown"
         self.intro_sent = bool(d.get("intro_sent"))
         pv = d.get("prompt_variant") or ""
@@ -222,7 +232,7 @@ class Conv:
             "prompt_variant": self.raw.get("prompt_variant"),
             "language": self.raw.get("language"),
             "phase": self.phase,
-            "outcome": outcome_of(self.phase, self.intro_sent, self.last_activity_at, now),
+            "outcome": outcome_of(self.phase, self.intro_sent, self.last_activity_at, now, self.debriefed_at is not None),
             "intro_sent": self.intro_sent,
             "started_at": _iso(self.started_at),
             "last_activity_at": _iso(self.last_activity_at),
@@ -235,7 +245,12 @@ class Conv:
             "n_ratings": len(self.ratings),
             "initial_rating": initial,
             "latest_rating": latest,
-            "rating_change": (latest - initial) if (initial is not None and latest is not None) else None,
+            # primary analysis: second rating minus first
+            "rating_pre": self.rating_pre,
+            "rating_post": self.rating_post,
+            "rating_change": (self.rating_post - self.rating_pre) if (self.rating_pre is not None and self.rating_post is not None) else None,
+            "n_later_ratings": len(self.later_ratings),
+            "debriefed": self.debriefed_at is not None,
             "ad_source_id": self.ad_source_id,
             "ctwa_clid": self.ctwa_clid,
             "n_referrals": self.n_referrals,
@@ -285,6 +300,7 @@ class Conv:
             "avg_assistant_msg_chars": round(sum(len(m["content"]) for m in asst_msgs) / len(asst_msgs), 1) if asst_msgs else None,
             "ratings": ";".join(f"{r['message_index']}:{r['score']}" for r in self.ratings),
             "ratings_json": json.dumps(self.ratings, ensure_ascii=False),
+            "later_ratings_json": json.dumps(self.later_ratings, ensure_ascii=False),
             "ad_source_type": referral.get("source_type"),
             "ad_source_url": referral.get("source_url"),
             "ad_headline": referral.get("headline"),
@@ -480,7 +496,7 @@ def status():
     now = dt.datetime.now(dt.timezone.utc)
     counts: dict[str, int] = {}
     for c in STORE.convs.values():
-        o = outcome_of(c.phase, c.intro_sent, c.last_activity_at, now)
+        o = outcome_of(c.phase, c.intro_sent, c.last_activity_at, now, c.debriefed_at is not None)
         counts[o] = counts.get(o, 0) + 1
     return {"total": len(STORE.convs), "by_outcome": counts, "last_refresh": _iso(STORE.last_refresh),
             "last_error": STORE.last_error, "demo": DEMO, "show_phone": SHOW_PHONE,

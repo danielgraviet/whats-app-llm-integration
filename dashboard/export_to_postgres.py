@@ -151,6 +151,9 @@ def flatten(phone: str, d: dict) -> tuple[dict, list[tuple], list[tuple]]:
     if initial is None and sorted_ratings:
         initial = sorted_ratings[0][3]
     latest = sorted_ratings[-1][3] if sorted_ratings else None
+    rating_pre = d.get("rating_pre") if d.get("rating_pre") is not None else initial
+    rating_post = d.get("rating_post") if d.get("rating_post") is not None else (sorted_ratings[1][3] if len(sorted_ratings) >= 2 else None)
+    later = [{"message_index": r[2], "score": r[3], "ts": r[0].isoformat()} for r in sorted_ratings[2:]]
 
     first_ref = (referrals[0].get("referral") or {}) if referrals else (raw_first.get("referral") or {})
 
@@ -171,6 +174,9 @@ def flatten(phone: str, d: dict) -> tuple[dict, list[tuple], list[tuple]]:
         "n_ratings": len(rating_rows),
         "initial_rating": initial,
         "latest_rating": latest,
+        "rating_pre": rating_pre,
+        "rating_post": rating_post,
+        "later_ratings": psycopg2.extras.Json(later),
         "n_referrals": len(referrals),
         "ad_source_id": first_ref.get("source_id"),
         "ad_source_type": first_ref.get("source_type"),
@@ -187,11 +193,13 @@ INSERT INTO wa_conversations (
     phone_hash, variant, prompt_variant, language, phase, intro_sent, started_at,
     last_user_msg_at, last_assistant_msg_at, last_activity_at, debriefed_at,
     user_turn_count, n_messages, n_ratings, initial_rating, latest_rating,
+    rating_pre, rating_post, later_ratings,
     n_referrals, ad_source_id, ad_source_type, ctwa_clid, synced_at
 ) VALUES (
     %(phone_hash)s, %(variant)s, %(prompt_variant)s, %(language)s, %(phase)s, %(intro_sent)s, %(started_at)s,
     %(last_user_msg_at)s, %(last_assistant_msg_at)s, %(last_activity_at)s, %(debriefed_at)s,
     %(user_turn_count)s, %(n_messages)s, %(n_ratings)s, %(initial_rating)s, %(latest_rating)s,
+    %(rating_pre)s, %(rating_post)s, %(later_ratings)s,
     %(n_referrals)s, %(ad_source_id)s, %(ad_source_type)s, %(ctwa_clid)s, now()
 )
 ON CONFLICT (phone_hash) DO UPDATE SET
@@ -203,7 +211,9 @@ ON CONFLICT (phone_hash) DO UPDATE SET
     last_activity_at = EXCLUDED.last_activity_at, debriefed_at = EXCLUDED.debriefed_at,
     user_turn_count = EXCLUDED.user_turn_count, n_messages = EXCLUDED.n_messages,
     n_ratings = EXCLUDED.n_ratings, initial_rating = EXCLUDED.initial_rating,
-    latest_rating = EXCLUDED.latest_rating, n_referrals = EXCLUDED.n_referrals,
+    latest_rating = EXCLUDED.latest_rating, rating_pre = EXCLUDED.rating_pre,
+    rating_post = EXCLUDED.rating_post, later_ratings = EXCLUDED.later_ratings,
+    n_referrals = EXCLUDED.n_referrals,
     ad_source_id = EXCLUDED.ad_source_id, ad_source_type = EXCLUDED.ad_source_type,
     ctwa_clid = EXCLUDED.ctwa_clid, synced_at = now();
 """
@@ -232,7 +242,7 @@ SELECT
     count(*) FILTER (WHERE phase = 'awaiting_initial_rating'),
     count(*) FILTER (WHERE phase = 'normal'),
     count(*) FILTER (WHERE phase = 'awaiting_check_in_rating'),
-    count(*) FILTER (WHERE phase = 'ended'),
+    count(*) FILTER (WHERE phase = 'ended' OR debriefed_at IS NOT NULL),
     count(*),
     count(*) FILTER (WHERE started_at > now() - interval '1 hour'),
     count(*) FILTER (WHERE debriefed_at > now() - interval '1 hour')
