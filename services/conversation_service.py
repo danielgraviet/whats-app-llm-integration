@@ -8,12 +8,33 @@ from services import prompt_service, trust_service
 _N_HISTORY_TURNS = 5
 
 
+def _is_control(conversation) -> bool:
+    return prompt_service.base_variant(conversation.prompt_variant) == prompt_service.CONTROL_VARIANT
+
+
+def _control_stage2(conversation) -> bool:
+    """Control participants move to the elections prompt once their second rating is in."""
+    return _is_control(conversation) and conversation.rating_post is not None
+
+
+def _rating_slot(conversation) -> str | None:
+    """Which analysis slot the rating about to be saved fills."""
+    n = len(conversation.feeling_array)
+    if n == 0:
+        return "pre"
+    if n == 1:
+        return "post"
+    return None
+
+
 def _initial_belief_level(conversation) -> int | None:
     """The participant's first trust rating (collected before the conversation).
 
     Prefers the rating recorded at message_index 0; falls back to the earliest
     rating in the array; None if no rating has been collected yet.
     """
+    if conversation.rating_pre is not None:
+        return conversation.rating_pre
     ratings = conversation.feeling_array
     if not ratings:
         return None
@@ -81,7 +102,12 @@ async def handle_incoming_message(
             f"Phase: {conversation.conversation_phase}\n"
             f"Turn count: {conversation.user_turn_count} "
             f"(debrief after {settings.DEBRIEF_AFTER_TURNS})\n"
-            f"Ratings: {len(conversation.feeling_array)}\n"
+            f"Ratings: {len(conversation.feeling_array)} "
+            f"(pre={conversation.rating_pre}, post={conversation.rating_post}, "
+            f"scale {settings.TRUST_RATING_MIN}-{settings.TRUST_RATING_MAX})\n"
+            f"Debriefed: {bool(conversation.debriefed_at)} "
+            f"(due after turn {trust_service.debrief_turn(prompt_service.base_variant(conversation.prompt_variant))}, "
+            f"{'conversation continues' if settings.CONTINUE_AFTER_DEBRIEF else 'conversation ends'})\n"
             f"Ad referrals: {len(conversation.referrals)}\n"
             f"First-message raw captured: {bool(conversation.first_message_raw)}\n\n"
             f"--- System Prompt ---\n{system_prompt}"
@@ -165,14 +191,13 @@ async def _handle_initial_rating(
             trust_flow_prompt_key="intro",
         )
 
-    # Valid rating — save and transition to normal conversation
-    firebase.save_trust_rating(client, phone_number, score, message_index=0)
+    # Valid rating — save (slot "pre") and transition to normal conversation
+    firebase.save_trust_rating(client, phone_number, score, message_index=0, slot=_rating_slot(conversation))
     firebase.update_conversation_phase(
         client, phone_number, "normal", user_turn_count=0
     )
-    return BotResponse(
-        text_messages=[trust_service.get_trust_prompt(lang, "rating_received")]
-    )
+    key = "rating_received_control" if _is_control(conversation) else "rating_received"
+    return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, key)])
 
 
 async def _handle_check_in_rating(
@@ -194,20 +219,28 @@ async def _handle_check_in_rating(
             trust_flow_prompt_key="check_in",
         )
 
-    # Valid rating — save and return to normal conversation
+    # Valid rating — save (slot "post" for the second rating) and return to normal conversation
+    slot = _rating_slot(conversation)
     firebase.save_trust_rating(
-        client, phone_number, score, message_index=conversation.user_turn_count
+        client, phone_number, score, message_index=conversation.user_turn_count, slot=slot
     )
     pending = firebase.get_and_clear_pending_response(client, phone_number)
-    messages = []  # can add a potential, "thanks for answering"
+    messages = []
     if pending:
         messages.append(pending)
 
+    # Control condition: the second rating closes the pets segment; move on to elections.
+    if slot == "post" and _is_control(conversation):
+        messages.append(trust_service.get_trust_prompt(lang, "control_transition"))
+
     # If the debrief turn landed on a check-in turn, the check-in ran first so
-    # the final rating is collected; now deliver the held reply and the debrief.
-    if trust_service.should_debrief(conversation.user_turn_count):
-        firebase.mark_debriefed(client, phone_number)
-        messages.append(trust_service.get_trust_prompt(lang, "debrief"))
+    # the rating is collected; now deliver the held reply and the debrief.
+    if trust_service.should_debrief(conversation.user_turn_count,
+                                    prompt_service.base_variant(conversation.prompt_variant),
+                                    conversation.debriefed_at is not None):
+        end = not settings.CONTINUE_AFTER_DEBRIEF
+        firebase.mark_debriefed(client, phone_number, end_conversation=end)
+        messages.append(trust_service.get_trust_prompt(lang, "debrief" if end else "debrief_open"))
         return BotResponse(text_messages=messages)
 
     firebase.update_conversation_phase(client, phone_number, "normal")
@@ -226,6 +259,7 @@ async def _handle_normal_message(
         language=conversation.language,
         variant=conversation.prompt_variant,
         user_belief_level=_initial_belief_level(conversation),
+        control_stage2=_control_stage2(conversation),
     )
 
     recent_history = conversation.history[-(_N_HISTORY_TURNS * 2) :]
@@ -253,17 +287,20 @@ async def _handle_normal_message(
             trust_flow_prompt_key="check_in",
         )
 
-    # Debrief turn: answer the participant's message, then send the debrief
-    # and end the conversation.
-    if trust_service.should_debrief(new_turn_count):
+    # Debrief turn (when it does not coincide with a check-in): answer, then
+    # send the debrief and either end the conversation or let it continue.
+    if trust_service.should_debrief(new_turn_count,
+                                    prompt_service.base_variant(conversation.prompt_variant),
+                                    conversation.debriefed_at is not None):
         firebase.update_conversation_phase(
             client, phone_number, "normal", user_turn_count=new_turn_count
         )
-        firebase.mark_debriefed(client, phone_number)
+        end = not settings.CONTINUE_AFTER_DEBRIEF
+        firebase.mark_debriefed(client, phone_number, end_conversation=end)
         return BotResponse(
             text_messages=[
                 ai_response,
-                trust_service.get_trust_prompt(conversation.language, "debrief"),
+                trust_service.get_trust_prompt(conversation.language, "debrief" if end else "debrief_open"),
             ]
         )
 

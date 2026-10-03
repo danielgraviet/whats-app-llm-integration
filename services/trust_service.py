@@ -18,6 +18,19 @@ Electoral Justice: https://www.justicaeleitoral.jus.br/urna-eletronica/
 Thank you very much for your contribution to this research.
 If you have any questions about the study, please contact us by email: k.vervuurt@utexas.edu""",
         "conversation_ended": """This research conversation has ended. Thank you again for participating. If you have any questions about the study, please contact us by email: k.vervuurt@utexas.edu""",
+        "debrief_open": """Thank you for participating in this research.
+
+This conversation is part of an academic study conducted by researchers at the University of Texas at Austin on how people interact with artificial intelligence systems when discussing topics related to Brazilian elections.
+
+If you are interested, here are some official and independent sources on how electronic voting machines work and how they are audited:
+
+TSE: https://www.tse.jus.br/comunicacao/noticias/2026/Janeiro/urna-eletronica-entenda-como-o-equipamento-transformou-o-processo-eleitoral-brasileiro
+Electoral Justice: https://www.justicaeleitoral.jus.br/urna-eletronica/
+
+Thank you very much for your contribution to this research. If you would like, you are welcome to keep the conversation going for as long as you wish; just keep writing. To finish, simply close this page.
+If you have any questions about the study, please contact us by email: k.vervuurt@utexas.edu""",
+        "rating_received_control": """Thank you for taking part! Before we talk about elections, let's first have a short conversation about cats and dogs. Do you have, or have you ever had, a pet?""",
+        "control_transition": """Thank you! Now let's talk about elections. To start, what comes to mind when you think about elections in Brazil?""",
     },
     "PT": {
         "intro": """Olá!
@@ -44,15 +57,32 @@ Justiça Eleitoral: https://www.justicaeleitoral.jus.br/urna-eletronica/
 Muito obrigado pela sua contribuição para esta pesquisa.
 Se tiver dúvidas sobre a pesquisa, favor entrar em contato pelo email: k.vervuurt@utexas.edu""",
         "conversation_ended": """Esta conversa de pesquisa foi encerrada. Obrigado novamente por participar. Se tiver dúvidas sobre a pesquisa, favor entrar em contato pelo email: k.vervuurt@utexas.edu""",
+        "debrief_open": """Obrigado por participar desta pesquisa.
+
+Esta conversa faz parte de um estudo acadêmico conduzido por pesquisadores da Universidade do Texas em Austin sobre a interação entre pessoas e sistemas de inteligência artificial ao discutir temas relacionados às eleições brasileiras.
+
+Se você tiver interesse, aqui estão algumas fontes oficiais e independentes sobre como as urnas eletrônicas funcionam e são auditadas:
+
+TSE: https://www.tse.jus.br/comunicacao/noticias/2026/Janeiro/urna-eletronica-entenda-como-o-equipamento-transformou-o-processo-eleitoral-brasileiro
+Justiça Eleitoral: https://www.justicaeleitoral.jus.br/urna-eletronica/
+
+Muito obrigado pela sua contribuição para esta pesquisa. Se quiser, você pode continuar a conversa pelo tempo que desejar — é só continuar escrevendo. Para encerrar, basta fechar esta página.
+Se tiver dúvidas sobre a pesquisa, favor entrar em contato pelo email: k.vervuurt@utexas.edu""",
+        "rating_received_control": """Obrigado por participar! Antes de falarmos sobre eleições, vamos primeiro conversar um pouco sobre gatos e cachorros. Você tem, ou já teve, algum animal de estimação?""",
+        "control_transition": """Obrigado! Agora vamos falar sobre eleições. Para começar, o que vem à sua mente quando você pensa nas eleições no Brasil?""",
     },
 }
 
 
+def _in_range(value: int) -> bool:
+    return settings.TRUST_RATING_MIN <= value <= settings.TRUST_RATING_MAX
+
+
 def parse_text_rating(text: str) -> int | None:
-    """Try to extract a valid 1-10 rating from plain text like '7'."""
+    """Try to extract a valid rating (within the configured scale) from plain text like '7'."""
     try:
         value = int(text.strip())
-        if 1 <= value <= 10:
+        if _in_range(value):
             return value
     except ValueError:
         pass
@@ -70,7 +100,7 @@ def parse_interactive_rating(list_reply_id: str) -> int | None:
         return None
     try:
         value = int(list_reply_id.split("_")[1])
-        if 1 <= value <= 10:
+        if _in_range(value):
             return value
     except (ValueError, IndexError):
         pass
@@ -83,9 +113,18 @@ def should_trigger_check_in(user_turn_count: int) -> bool:
     return user_turn_count > 0 and user_turn_count % interval == 0
 
 
-def should_debrief(user_turn_count: int) -> bool:
-    """Return True once the participant has sent enough messages to end the study."""
-    return user_turn_count >= settings.DEBRIEF_AFTER_TURNS
+def debrief_turn(variant_base: str | None) -> int:
+    """Turn after which the debrief is shown. The control condition talks about
+    pets first, so its debrief comes one check-in interval later, after it has
+    had the same number of election turns as the other conditions."""
+    from services import prompt_service  # local import: avoids a cycle
+    extra = settings.TRUST_CHECK_INTERVAL if variant_base == prompt_service.CONTROL_VARIANT else 0
+    return settings.DEBRIEF_AFTER_TURNS + extra
+
+
+def should_debrief(user_turn_count: int, variant_base: str | None = None, already_debriefed: bool = False) -> bool:
+    """Return True when the debrief is due and has not been shown yet."""
+    return (not already_debriefed) and user_turn_count >= debrief_turn(variant_base)
 
 
 def get_trust_prompt(language: str, prompt_key: str) -> str:

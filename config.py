@@ -23,6 +23,12 @@ class Settings:
     # user messages in the normal (LLM) phase. The intro and rating replies
     # do not count.
     DEBRIEF_AFTER_TURNS = int(os.getenv("DEBRIEF_AFTER_TURNS", "8"))
+    # Trust-rating scale. WhatsApp flows use 1-10; the web app sets 0-100.
+    TRUST_RATING_MIN = int(os.getenv("TRUST_RATING_MIN", "1"))
+    TRUST_RATING_MAX = int(os.getenv("TRUST_RATING_MAX", "10"))
+    # After the debrief: end the conversation (WhatsApp) or let the participant
+    # keep talking, with a rating every TRUST_CHECK_INTERVAL turns (web).
+    CONTINUE_AFTER_DEBRIEF = os.getenv("CONTINUE_AFTER_DEBRIEF", "false").lower() == "true"
     # Deployed git commit, for the /health endpoint. Railway injects
     # RAILWAY_GIT_COMMIT_SHA automatically; GIT_COMMIT_SHA is a manual override.
     GIT_COMMIT_SHA = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GIT_COMMIT_SHA")

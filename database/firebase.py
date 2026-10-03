@@ -120,19 +120,23 @@ def get_or_create_conversation(
 
 
 def save_trust_rating(
-    client, phone_number: str, score: int, message_index: int
+    client, phone_number: str, score: int, message_index: int, slot: str | None = None
 ) -> bool:
-    """Appends a trust rating to the feeling_array in Firestore."""
+    """Appends a trust rating to the feeling_array in Firestore.
+
+    slot="pre" / "post" additionally stores the score in rating_pre / rating_post,
+    the two values the primary analysis compares.
+    """
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
         rating = models.TrustRating(score=score, message_index=message_index)
-        doc_ref.set(
-            {
-                "feeling_array": firestore.ArrayUnion([rating.model_dump()]),
-                "updated_at": _now(),
-            },
-            merge=True,
-        )
+        update = {
+            "feeling_array": firestore.ArrayUnion([rating.model_dump()]),
+            "updated_at": _now(),
+        }
+        if slot in ("pre", "post"):
+            update[f"rating_{slot}"] = score
+        doc_ref.set(update, merge=True)
         return True
     except Exception:
         logger.exception(
@@ -166,14 +170,16 @@ def update_conversation_phase(
         return False
 
 
-def mark_debriefed(client, phone_number: str) -> bool:
-    """Moves the conversation to the terminal 'ended' phase and stamps the time."""
+def mark_debriefed(client, phone_number: str, end_conversation: bool = True) -> bool:
+    """Stamps debriefed_at. With end_conversation (WhatsApp default) the phase
+    becomes the terminal 'ended'; otherwise the conversation stays 'normal' and
+    the participant may keep talking."""
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
         now = _now()
-        doc_ref.update(
-            {"conversation_phase": "ended", "debriefed_at": now, "updated_at": now}
-        )
+        update = {"debriefed_at": now, "updated_at": now,
+                  "conversation_phase": "ended" if end_conversation else "normal"}
+        doc_ref.update(update)
         return True
     except Exception:
         logger.exception("Error marking debriefed for phone_number=%s", phone_number)

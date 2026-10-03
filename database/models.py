@@ -34,6 +34,10 @@ class Conversation(pydantic.BaseModel):
     # phases: awaiting_initial_rating -> normal <-> awaiting_check_in_rating -> ended
     conversation_phase: str = "awaiting_initial_rating"
     debriefed_at: Optional[datetime] = None
+    # The two ratings the primary analysis uses: before the conversation and
+    # after the first TRUST_CHECK_INTERVAL turns. All ratings stay in feeling_array.
+    rating_pre: Optional[int] = None
+    rating_post: Optional[int] = None
     feeling_array: List[TrustRating] = []
     user_turn_count: int = 0
     intro_sent: bool = False
