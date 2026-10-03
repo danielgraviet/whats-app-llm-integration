@@ -138,7 +138,7 @@ def _jsonable(v: Any) -> Any:
 
 def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, now: dt.datetime, debriefed: bool = False) -> str:
     if phase == "ended" or debriefed:
-        return "completed"
+        return "debriefed"      # the conversation may still be going; the study measurement is complete
     if not intro_sent or phase == "awaiting_initial_rating":
         return "never rated"
     if last_activity and last_activity < now - dt.timedelta(hours=ABANDON_HOURS):

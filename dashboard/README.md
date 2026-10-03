@@ -136,7 +136,7 @@ several definitions so you can choose in Grafana:
 - **active (5 min)**: not ended, and the conversation document was updated in the last 5 minutes. Someone is effectively typing.
 - **active (30 min)**: same with a 30-minute window. A session in progress with slow replies.
 - **awaiting rating**: blocked on a trust-rating reply (initial or check-in).
-- **Outcome** (pie and stats): `completed` = debriefed; `never rated` = dropped before the first rating; `abandoned` = not ended and silent longer than `abandon_after()` (default 24 hours); otherwise `in progress`.
+- **Outcome** (pie and stats): `debriefed` = the debrief has been shown (the conversation may continue); `never rated` = dropped before the first rating; `abandoned` = not ended and silent longer than `abandon_after()` (default 24 hours); otherwise `in progress`.
 
 The abandon threshold is a tiny SQL function rather than a Grafana variable,
 because shared/public dashboards cannot use template variables. To change it:

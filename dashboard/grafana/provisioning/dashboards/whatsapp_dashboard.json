@@ -582,7 +582,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'in progress'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'in progress'\n",
           "refId": "A"
         }
       ],
@@ -649,7 +649,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
           "refId": "A"
         }
       ],
@@ -716,7 +716,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'never rated'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'never rated'\n",
           "refId": "A"
         }
       ],
@@ -919,7 +919,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(user_turn_count) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
+          "rawSql": "SELECT avg(user_turn_count) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
           "refId": "A"
         }
       ],
@@ -1055,7 +1055,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(extract(epoch FROM (last_activity_at - started_at)) / 60.0) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned' AND started_at IS NOT NULL\n",
+          "rawSql": "SELECT avg(extract(epoch FROM (last_activity_at - started_at)) / 60.0) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned' AND started_at IS NOT NULL\n",
           "refId": "A"
         }
       ],
@@ -1447,7 +1447,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
+          "rawSql": "SELECT CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
           "refId": "A"
         }
       ],
@@ -2031,7 +2031,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  phone_hash AS participant,\n  variant,\n  language,\n  phase,\n  CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'completed (debriefed)'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome,\n  user_turn_count AS turns,\n  rating_pre AS \"pre\",\n  rating_post AS \"post\",\n  rating_post - rating_pre AS \"change\",\n  ad_source_id AS \"ad id\",\n  started_at,\n  last_activity_at,\n  debriefed_at\nFROM wa_conversations\nWHERE $__timeFilter(last_activity_at)\nORDER BY last_activity_at DESC\nLIMIT 200\n",
+          "rawSql": "SELECT\n  phone_hash AS participant,\n  variant,\n  language,\n  phase,\n  CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome,\n  user_turn_count AS turns,\n  rating_pre AS \"pre\",\n  rating_post AS \"post\",\n  rating_post - rating_pre AS \"change\",\n  ad_source_id AS \"ad id\",\n  started_at,\n  last_activity_at,\n  debriefed_at\nFROM wa_conversations\nWHERE $__timeFilter(last_activity_at)\nORDER BY last_activity_at DESC\nLIMIT 200\n",
           "refId": "A"
         }
       ],
