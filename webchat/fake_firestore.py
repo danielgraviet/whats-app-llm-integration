@@ -26,13 +26,21 @@ class _DocRef:
     def set(self, data, merge=False):
         cur = dict(self._s.get(self.id) or {}) if merge else {}
         for k, v in data.items():
+            # "a.b" updates nested field b of map a, as Firestore's update() does
+            target, key = cur, k
+            if "." in k:
+                head, key = k.rsplit(".", 1)
+                for part in head.split("."):
+                    target = target.setdefault(part, {})
             if isinstance(v, _fs.ArrayUnion):
-                lst = list(cur.get(k, []))
+                lst = list(target.get(key, []))
                 for item in v.values:
                     if item not in lst: lst.append(item)
-                cur[k] = lst
+                target[key] = lst
+            elif isinstance(v, _fs.Increment):
+                target[key] = (target.get(key) or 0) + v.value
             else:
-                cur[k] = v
+                target[key] = v
         self._s[self.id] = cur
     def update(self, data):
         if self.id not in self._s: raise KeyError(f"no document {self.id}")

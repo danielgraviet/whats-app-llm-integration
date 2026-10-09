@@ -62,6 +62,12 @@ async def process_whatsapp_ai(
         for text in bot_response.text_messages:
             await send_message_to_whatsapp(phone_number, text)
 
+        if bot_response.send_screening:
+            q = next(q for q in trust_service.SCREENING_QUESTIONS if q["key"] == bot_response.send_screening)
+            opts = " / ".join(o["label"] for o in trust_service.screening_options(q, bot_response.trust_flow_language))
+            body = trust_service.get_trust_prompt(bot_response.trust_flow_language, q["text_key"]) + f"\n\n({opts})"
+            await send_message_to_whatsapp(phone_number, body)
+
         if bot_response.send_trust_flow:
             body_text = trust_service.get_trust_prompt(
                 language=bot_response.trust_flow_language,

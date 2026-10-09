@@ -14,8 +14,9 @@ Endpoints (all relative, so the app works under any nginx prefix):
     GET  /                          the chat page (Portuguese, mobile-first)
     POST /api/session               create or resume a session; body carries page metadata
     GET  /api/session/{id}          current state (history, phase, pending rating prompt)
+    POST /api/session/{id}/screening  eligibility answer -> next question / baseline / closing
     POST /api/session/{id}/message  participant text  -> bot replies (+ rating prompt, debrief)
-    POST /api/session/{id}/rating   participant 1-10  -> bot replies
+    POST /api/session/{id}/rating   participant 0-100 -> bot replies
     GET  /health                    liveness + commit
 """
 
@@ -109,12 +110,15 @@ UI_TEXT = {
     "placeholder": "Digite sua mensagem",
     "send": "Enviar",
     "rate_button": "Avaliar agora",
-    "rate_title": "Qual é o seu grau de confiança nas urnas eletrônicas do Brasil?",
-    "rate_low": "Nenhuma confiança",
-    "rate_high": "Confiança total",
-    "rate_hint": "Mova o controle para registrar sua resposta",
+    "rate_title": "O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?",
+    "rate_low": "Não confio nem um pouco",
+    "rate_high": "Confio totalmente",
+    "rate_unit": "%",
+    "rate_hint": "Mova a barra para registrar sua resposta",
     "rate_confirm": "Avaliar agora",
     "rate_pending": "Por favor, responda à avaliação acima antes de continuar.",
+    "screening_pending": "Por favor, responda à pergunta acima antes de continuar.",
+    "screened_out": "Esta sessão foi encerrada.",
     "typing": "digitando…",
     "ended": "Esta conversa foi encerrada. Obrigado por participar.",
     "error": "Desculpe, ocorreu um erro. Tente novamente em instantes.",
@@ -132,9 +136,25 @@ class SessionStart(BaseModel):
     referrer: str = ""
     user_agent: str = ""
     language: str = ""
+    languages: list[str] = Field(default_factory=list)
     screen: str = ""
+    viewport: str = ""
     timezone: str = ""
     page_url: str = ""
+    platform: str = ""
+    touch: bool | None = None
+    cookies_enabled: bool | None = None
+    color_depth: int | None = None
+    connection: str = ""                            # navigator.connection.effectiveType
+    device_memory: float | None = None
+    hardware_concurrency: int | None = None
+    opened_at: str = ""                             # client clock, ISO
+    client_hints: dict[str, str] = Field(default_factory=dict)   # navigator.userAgentData, if any
+
+
+class ScreeningIn(BaseModel):
+    question: str = Field(pattern=r"^q[12]$")
+    answer: str = Field(pattern=r"^(sim|nao|nao_sei)$")
 
 
 class MessageIn(BaseModel):
@@ -174,7 +194,7 @@ def build_raw_message(sid: str, text: str, kind: str, meta: SessionStart | None,
     if kind == "text":
         raw["text"] = {"body": text}
     else:
-        raw["interactive"] = {"type": "web_rating", "rating": text}
+        raw["interactive"] = {"type": "web_screening" if text.startswith("screening_") else "web_rating", "reply_id": text}
     if meta is not None:
         q = {k: v[:500] for k, v in meta.query.items()}
         ref = {k: q[k] for k in q if k.startswith("utm_") or k in ("fbclid", "gclid", "ad_id", "adset_id", "campaign_id", "source_id", "ref")}
@@ -188,12 +208,30 @@ def build_raw_message(sid: str, text: str, kind: str, meta: SessionStart | None,
                 "ctwa_clid": q.get("fbclid", ""),
                 "params": ref,
             }
-        raw["web"] = {
-            "query": q, "referrer": meta.referrer[:1000], "user_agent": meta.user_agent[:500], "language": meta.language[:50],
-            "screen": meta.screen[:50], "timezone": meta.timezone[:80], "page_url": meta.page_url[:1000],
-            "ip_hash": ip_hash(request) if request else "", "accept_language": (request.headers.get("accept-language", "")[:200] if request else ""),
-        }
+        raw["web"] = page_meta(meta, request)
     return raw
+
+
+_HINT_HEADERS = ("sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "sec-ch-ua-platform-version", "sec-ch-ua-model",
+                 "x-forwarded-proto", "via", "cf-ipcountry", "x-country")
+
+
+def page_meta(meta: SessionStart, request: Request | None) -> dict:
+    """Everything the browser and the request tell us about the visit, minus the raw IP."""
+    q = {k: v[:500] for k, v in meta.query.items()}
+    out = {
+        "query": q, "referrer": meta.referrer[:1000], "user_agent": meta.user_agent[:500], "language": meta.language[:50],
+        "languages": [l[:20] for l in meta.languages[:10]], "screen": meta.screen[:50], "viewport": meta.viewport[:50],
+        "timezone": meta.timezone[:80], "page_url": meta.page_url[:1000], "platform": meta.platform[:80],
+        "touch": meta.touch, "cookies_enabled": meta.cookies_enabled, "color_depth": meta.color_depth,
+        "connection": meta.connection[:30], "device_memory": meta.device_memory, "hardware_concurrency": meta.hardware_concurrency,
+        "opened_at": meta.opened_at[:40], "client_hints": {k[:40]: str(v)[:100] for k, v in list(meta.client_hints.items())[:10]},
+    }
+    if request is not None:
+        out["ip_hash"] = ip_hash(request)
+        out["accept_language"] = request.headers.get("accept-language", "")[:200]
+        out["headers"] = {h: request.headers[h][:200] for h in _HINT_HEADERS if h in request.headers}
+    return out
 
 
 def contacts_for(meta: SessionStart | None, sid: str) -> list:
@@ -212,6 +250,12 @@ def web_text(lang: str, key: str) -> str:
              .replace("please tap the button below to answer one quick question.", "please use the slider below to answer one quick question."))
 
 
+def screening_payload(key: str, lang: str) -> dict:
+    q = next(q for q in trust_service.SCREENING_QUESTIONS if q["key"] == key)
+    return {"question": key, "prompt": trust_service.get_trust_prompt(lang, q["text_key"]),
+            "options": trust_service.screening_options(q, lang)}
+
+
 def state_of(sid: str) -> dict:
     doc = CLIENT.collection(firebase.COLLECTION).document(sid).get()
     if not doc.exists:
@@ -221,12 +265,22 @@ def state_of(sid: str) -> dict:
     lang = d.get("language") or "PT"
     history = [{"role": m["role"], "content": m["content"]} for m in d.get("history", [])]
     pending_rating = None
-    if phase == "awaiting_initial_rating" and d.get("intro_sent"):
-        pending_rating = {"kind": "intro", "prompt": web_text(lang, "intro")}
+    pending_screening = None
+    if phase == "awaiting_screening" and d.get("intro_sent"):
+        q = trust_service.pending_screening_question(d.get("screening") or {})
+        if q:
+            pending_screening = screening_payload(q["key"], lang)
+    elif phase == "awaiting_initial_rating" and d.get("intro_sent"):
+        pending_rating = {"kind": "baseline", "prompt": web_text(lang, "baseline")}
     elif phase == "awaiting_check_in_rating":
         pending_rating = {"kind": "check_in", "prompt": web_text(lang, "check_in")}
+    screened_out = phase == "screened_out"
     return {"session_id": sid, "phase": phase, "ended": phase == "ended", "history": history, "language": lang,
-            "pending_rating": pending_rating, "user_turn_count": d.get("user_turn_count", 0),
+            "pending_rating": pending_rating, "pending_screening": pending_screening,
+            "screened_out": screened_out,
+            "closing": trust_service.get_trust_prompt(lang, "screening_closing") if screened_out else None,
+            "intro_text": trust_service.get_trust_prompt(lang, "intro"),
+            "user_turn_count": d.get("user_turn_count", 0),
             "ratings": [r.get("score") for r in d.get("feeling_array", [])],
             # so a reload of a finished conversation still shows the debrief (it is not part of history)
             "debrief": trust_service.get_trust_prompt(lang, "debrief") if phase == "ended" else None,
@@ -235,11 +289,13 @@ def state_of(sid: str) -> dict:
 
 def shape(sid: str, bot) -> dict:
     """Turn a BotResponse into what the page renders."""
-    out = {"messages": list(bot.text_messages), "rating": None}
+    out = {"messages": list(bot.text_messages), "rating": None, "screening": None}
     if bot.send_trust_flow:
         out["rating"] = {"kind": bot.trust_flow_prompt_key, "prompt": web_text(bot.trust_flow_language, bot.trust_flow_prompt_key)}
+    if bot.send_screening:
+        out["screening"] = screening_payload(bot.send_screening, bot.trust_flow_language)
     st = state_of(sid)
-    out.update({"phase": st["phase"], "ended": st["ended"], "user_turn_count": st["user_turn_count"]})
+    out.update({"phase": st["phase"], "ended": st["ended"], "screened_out": st["screened_out"], "user_turn_count": st["user_turn_count"]})
     return out
 
 
@@ -254,6 +310,7 @@ def index():
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "healthy", "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION,
+            "screening_enabled": settings.SCREENING_ENABLED,
             "rating_scale": [settings.TRUST_RATING_MIN, settings.TRUST_RATING_MAX], "check_in_interval": settings.TRUST_CHECK_INTERVAL,
             "debrief_after_turns": settings.DEBRIEF_AFTER_TURNS, "continue_after_debrief": settings.CONTINUE_AFTER_DEBRIEF}
 
@@ -273,14 +330,18 @@ async def start_session(body: SessionStart, request: Request):
     """
     sid = body.session_id
     if sid and CLIENT.collection(firebase.COLLECTION).document(sid).get().exists:
+        firebase.record_visit(CLIENT, sid, page_meta(body, request))
         st = state_of(sid); st["resumed"] = True
         return st
     sid = new_session_id()
     async with lock_for(sid):
+        # The document is created here, before any screening, so every visitor
+        # is recorded with their ad / page metadata even if they never qualify.
         bot = await conversation_service.handle_incoming_message(
             CLIENT, sid, "[abrir página]", "text",
             raw_message=build_raw_message(sid, "[abrir página]", "text", body, request),
             contacts=contacts_for(body, sid), allow_dev_commands=True)
+    firebase.record_visit(CLIENT, sid, page_meta(body, request))
     st = state_of(sid); st["resumed"] = False; st["intro"] = shape(sid, bot)
     log.info("new session %s variant=%s", sid, CLIENT.collection(firebase.COLLECTION).document(sid).get().to_dict().get("prompt_variant"))
     return st
@@ -305,10 +366,15 @@ async def post_message(sid: str, body: MessageIn, request: Request):
             return {"messages": list(bot.text_messages), "rating": None, "phase": "reset", "ended": False, "user_turn_count": 0, "reset": True}
         return shape(sid, bot)
     if st["ended"]:
-        return {"messages": [trust_service.get_trust_prompt(st["language"], "conversation_ended")], "rating": None, "phase": "ended", "ended": True, "user_turn_count": st["user_turn_count"]}
+        return {"messages": [trust_service.get_trust_prompt(st["language"], "conversation_ended")], "rating": None, "screening": None, "phase": "ended", "ended": True, "screened_out": False, "user_turn_count": st["user_turn_count"]}
+    if st["screened_out"]:
+        return {"messages": [st["closing"]], "rating": None, "screening": None, "phase": "screened_out", "ended": False, "screened_out": True, "user_turn_count": 0}
+    if st["pending_screening"]:
+        # Text while a screening question is open: re-offer the buttons (the service would say "answer sim/não").
+        return {"messages": [], "rating": None, "screening": st["pending_screening"], "phase": st["phase"], "ended": False, "screened_out": False, "user_turn_count": 0}
     if st["pending_rating"]:
         # WhatsApp would answer "use the button"; on the web the widget is right there, so just re-show it.
-        return {"messages": [], "rating": st["pending_rating"], "phase": st["phase"], "ended": False, "user_turn_count": st["user_turn_count"]}
+        return {"messages": [], "rating": st["pending_rating"], "screening": None, "phase": st["phase"], "ended": False, "screened_out": False, "user_turn_count": st["user_turn_count"]}
     async with lock_for(sid):
         try:
             bot = await conversation_service.handle_incoming_message(
@@ -321,11 +387,25 @@ async def post_message(sid: str, body: MessageIn, request: Request):
     return shape(sid, bot)
 
 
+@app.post("/api/session/{sid}/screening")
+async def post_screening(sid: str, body: ScreeningIn, request: Request):
+    st = state_of(sid)
+    if st["screened_out"]:
+        return {"messages": [st["closing"]], "rating": None, "screening": None, "phase": "screened_out", "ended": False, "screened_out": True, "user_turn_count": 0}
+    if not st["pending_screening"] or st["pending_screening"]["question"] != body.question:
+        raise HTTPException(409, "that screening question is not pending")
+    reply_id = f"screening_{body.question}_{body.answer}"
+    async with lock_for(sid):
+        bot = await conversation_service.handle_incoming_message(
+            CLIENT, sid, reply_id, "interactive", raw_message=build_raw_message(sid, reply_id, "interactive", None, request), contacts=[], allow_dev_commands=True)
+    return shape(sid, bot)
+
+
 @app.post("/api/session/{sid}/rating")
 async def post_rating(sid: str, body: RatingIn, request: Request):
     st = state_of(sid)
     if st["ended"]:
-        return {"messages": [], "rating": None, "phase": "ended", "ended": True, "user_turn_count": st["user_turn_count"]}
+        return {"messages": [], "rating": None, "screening": None, "phase": "ended", "ended": True, "screened_out": False, "user_turn_count": st["user_turn_count"]}
     if not st["pending_rating"]:
         raise HTTPException(409, "no rating is pending")
     reply_id = f"rating_{body.score}"

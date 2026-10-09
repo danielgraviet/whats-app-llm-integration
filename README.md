@@ -68,6 +68,10 @@ The chatbot collects trust ratings at two points:
 ### Conversation Phases
 
 ```
+awaiting_screening ──(both answers "sim")──► awaiting_initial_rating
+        │
+        └──("não" / "não sei")──► screened_out   (terminal; document kept)
+
 awaiting_initial_rating ──(user selects rating)──► normal
                                                      │
                                               (every N turns)
@@ -85,6 +89,16 @@ awaiting_initial_rating ──(user selects rating)──► normal
                                                      ▼
                                                    ended
 ```
+
+### Eligibility Screening
+
+Before the baseline rating, two questions (18 or older? eligible to vote in
+Brazil?) are asked one at a time. Only "sim" to both proceeds; anything else
+sends the closing message and moves the document to the terminal
+`screened_out` phase. Answers are stored as they arrive under `screening`.
+The document, with all ad and page metadata, is created on first contact,
+so participants who never qualify are still recorded. `SCREENING_ENABLED`
+(default true) turns the step off.
 
 ### Debriefing and Conversation End
 

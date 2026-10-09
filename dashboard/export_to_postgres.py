@@ -164,6 +164,11 @@ def flatten(phone: str, d: dict) -> tuple[dict, list[tuple], list[tuple]]:
         "language": d.get("language"),
         "phase": d.get("conversation_phase"),
         "intro_sent": bool(d.get("intro_sent", False)),
+        "screening_age_18": (d.get("screening") or {}).get("age_18"),
+        "screening_eligible_voter": (d.get("screening") or {}).get("eligible_voter"),
+        "screening_passed": (d.get("screening") or {}).get("passed"),
+        "screened_out_at": _utc(d.get("screened_out_at")),
+        "page_loads": int(d.get("page_loads") or 0),
         "started_at": started_at,
         "last_user_msg_at": max(user_ts) if user_ts else None,
         "last_assistant_msg_at": max(asst_ts) if asst_ts else None,
@@ -190,13 +195,15 @@ def flatten(phone: str, d: dict) -> tuple[dict, list[tuple], list[tuple]]:
 # ----------------------------------------------------------------------------
 UPSERT_CONV = """
 INSERT INTO wa_conversations (
-    phone_hash, variant, prompt_variant, language, phase, intro_sent, started_at,
+    phone_hash, variant, prompt_variant, language, phase, intro_sent,
+    screening_age_18, screening_eligible_voter, screening_passed, screened_out_at, page_loads, started_at,
     last_user_msg_at, last_assistant_msg_at, last_activity_at, debriefed_at,
     user_turn_count, n_messages, n_ratings, initial_rating, latest_rating,
     rating_pre, rating_post, later_ratings,
     n_referrals, ad_source_id, ad_source_type, ctwa_clid, synced_at
 ) VALUES (
-    %(phone_hash)s, %(variant)s, %(prompt_variant)s, %(language)s, %(phase)s, %(intro_sent)s, %(started_at)s,
+    %(phone_hash)s, %(variant)s, %(prompt_variant)s, %(language)s, %(phase)s, %(intro_sent)s,
+    %(screening_age_18)s, %(screening_eligible_voter)s, %(screening_passed)s, %(screened_out_at)s, %(page_loads)s, %(started_at)s,
     %(last_user_msg_at)s, %(last_assistant_msg_at)s, %(last_activity_at)s, %(debriefed_at)s,
     %(user_turn_count)s, %(n_messages)s, %(n_ratings)s, %(initial_rating)s, %(latest_rating)s,
     %(rating_pre)s, %(rating_post)s, %(later_ratings)s,
@@ -205,6 +212,8 @@ INSERT INTO wa_conversations (
 ON CONFLICT (phone_hash) DO UPDATE SET
     variant = EXCLUDED.variant, prompt_variant = EXCLUDED.prompt_variant,
     language = EXCLUDED.language, phase = EXCLUDED.phase, intro_sent = EXCLUDED.intro_sent,
+    screening_age_18 = EXCLUDED.screening_age_18, screening_eligible_voter = EXCLUDED.screening_eligible_voter,
+    screening_passed = EXCLUDED.screening_passed, screened_out_at = EXCLUDED.screened_out_at, page_loads = EXCLUDED.page_loads,
     started_at = COALESCE(wa_conversations.started_at, EXCLUDED.started_at),
     last_user_msg_at = EXCLUDED.last_user_msg_at,
     last_assistant_msg_at = EXCLUDED.last_assistant_msg_at,
@@ -236,8 +245,8 @@ INSERT INTO rt_metrics (
 )
 SELECT
     now(),
-    count(*) FILTER (WHERE phase <> 'ended' AND last_activity_at > now() - interval '5 minutes'),
-    count(*) FILTER (WHERE phase <> 'ended' AND last_activity_at > now() - interval '30 minutes'),
+    count(*) FILTER (WHERE phase NOT IN ('ended', 'screened_out') AND last_activity_at > now() - interval '5 minutes'),
+    count(*) FILTER (WHERE phase NOT IN ('ended', 'screened_out') AND last_activity_at > now() - interval '30 minutes'),
     count(*) FILTER (WHERE phase IN ('awaiting_initial_rating', 'awaiting_check_in_rating') AND intro_sent),
     count(*) FILTER (WHERE phase = 'awaiting_initial_rating'),
     count(*) FILTER (WHERE phase = 'normal'),

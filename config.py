@@ -19,6 +19,10 @@ class Settings:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")
     OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "low")
     TRUST_CHECK_INTERVAL = int(os.getenv("TRUST_CHECK_INTERVAL", "3"))
+    # Eligibility screening (18+ and eligible to vote) before the baseline
+    # rating. Participants who fail get a closing message and a terminal
+    # 'screened_out' phase; their document (with ad/page metadata) is kept.
+    SCREENING_ENABLED = os.getenv("SCREENING_ENABLED", "true").lower() == "true"
     # Debrief the participant and end the study conversation after this many
     # user messages in the normal (LLM) phase. The intro and rating replies
     # do not count.

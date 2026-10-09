@@ -89,7 +89,7 @@ def save_user_message(client, phone_number: str, message_text: str) -> bool:
 
 
 def get_or_create_conversation(
-    client, phone_number: str, language: str, variant: str
+    client, phone_number: str, language: str, variant: str, initial_phase: str | None = None
 ) -> models.Conversation:
     # check the database for existing conversation
     # if exists return convo.
@@ -114,6 +114,7 @@ def get_or_create_conversation(
             language=language,
             prompt_variant=variant,
             history=[],
+            **({"conversation_phase": initial_phase} if initial_phase else {}),
         )
         doc_ref.set(convo.to_firestore())
         return convo
@@ -285,6 +286,60 @@ def record_metadata(
         return True
     except Exception:
         logger.exception("Error recording metadata for phone_number=%s", phone_number)
+        return False
+
+
+def save_screening_answer(client, phone_number: str, conversation: models.Conversation,
+                          question: str, answer: str) -> bool:
+    """Stores one eligibility answer (question = 'age_18' | 'eligible_voter')
+    with its timestamp. Also mirrored onto the in-memory model."""
+    try:
+        now = _now()
+        update = {f"screening.{question}": answer, f"screening.{question}_at": now, "updated_at": now}
+        client.collection(COLLECTION).document(phone_number).update(update)
+        conversation.screening[question] = answer
+        conversation.screening[f"{question}_at"] = now
+        return True
+    except Exception:
+        logger.exception("Error saving screening answer for phone_number=%s", phone_number)
+        return False
+
+
+def finish_screening(client, phone_number: str, conversation: models.Conversation, passed: bool) -> bool:
+    """Marks the screening complete. Passed -> phase awaiting_initial_rating;
+    failed -> terminal phase screened_out with screened_out_at stamped."""
+    try:
+        now = _now()
+        update = {"screening.passed": passed, "screening.completed_at": now, "updated_at": now,
+                  "conversation_phase": "awaiting_initial_rating" if passed else "screened_out"}
+        if not passed:
+            update["screened_out_at"] = now
+        client.collection(COLLECTION).document(phone_number).update(update)
+        conversation.screening["passed"] = passed
+        conversation.screening["completed_at"] = now
+        conversation.conversation_phase = update["conversation_phase"]
+        if not passed:
+            conversation.screened_out_at = now
+        return True
+    except Exception:
+        logger.exception("Error finishing screening for phone_number=%s", phone_number)
+        return False
+
+
+def record_visit(client, phone_number: str, visit: dict) -> bool:
+    """Engagement metadata: counts every page open/resume, stamps last_seen_at,
+    and appends the visit's page metadata (web only). Never raises."""
+    try:
+        now = _now()
+        entry = {"at": now.isoformat(), **visit}
+        client.collection(COLLECTION).document(phone_number).set(
+            {"page_loads": firestore.Increment(1), "last_seen_at": now,
+             "visits": firestore.ArrayUnion([entry]), "updated_at": now},
+            merge=True,
+        )
+        return True
+    except Exception:
+        logger.exception("Error recording visit for phone_number=%s", phone_number)
         return False
 
 

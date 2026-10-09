@@ -31,9 +31,21 @@ class Conversation(pydantic.BaseModel):
     prompt_variant: str = "PT_prompt_A_control_condition"
 
     # metrics for tracking feelings
-    # phases: awaiting_initial_rating -> normal <-> awaiting_check_in_rating -> ended
+    # phases: awaiting_screening -> awaiting_initial_rating -> normal <-> awaiting_check_in_rating -> ended
+    #         awaiting_screening -> screened_out (terminal; failed eligibility)
     conversation_phase: str = "awaiting_initial_rating"
     debriefed_at: Optional[datetime] = None
+    # Eligibility screening answers, written as each one arrives so a partial
+    # screening is still recorded: {"age_18": "sim"|"nao", "age_18_at": ts,
+    # "eligible_voter": "sim"|"nao"|"nao_sei", "eligible_voter_at": ts,
+    # "passed": bool, "completed_at": ts}
+    screening: Dict[str, Any] = {}
+    screened_out_at: Optional[datetime] = None
+    # Engagement metadata (web): how many times the page was opened/resumed,
+    # when it was last opened, and the per-visit page metadata.
+    page_loads: int = 0
+    last_seen_at: Optional[datetime] = None
+    visits: List[Dict[str, Any]] = []
     # The two ratings the primary analysis uses: before the conversation and
     # after the first TRUST_CHECK_INTERVAL turns. All ratings stay in feeling_array.
     rating_pre: Optional[int] = None

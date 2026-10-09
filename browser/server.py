@@ -139,6 +139,10 @@ def _jsonable(v: Any) -> Any:
 def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, now: dt.datetime, debriefed: bool = False) -> str:
     if phase == "ended" or debriefed:
         return "debriefed"      # the conversation may still be going; the study measurement is complete
+    if phase == "screened_out":
+        return "screened out"   # failed eligibility (under 18 / not eligible to vote); document kept for attribution
+    if phase == "awaiting_screening":
+        return "not screened"   # opened the page but never finished the two eligibility questions
     if not intro_sent or phase == "awaiting_initial_rating":
         return "never rated"
     if last_activity and last_activity < now - dt.timedelta(hours=ABANDON_HOURS):
@@ -151,6 +155,8 @@ CSV_COLUMNS = [
     "id", "phone", "profile_name", "variant", "prompt_variant", "language",
     # state
     "phase", "outcome", "intro_sent",
+    # eligibility screening (sim / nao / nao_sei; blank = not answered)
+    "screening_age_18", "screening_eligible_voter", "screening_passed", "screened_out_at", "page_loads",
     # timeline
     "started_at", "first_message_at", "last_user_msg_at", "last_assistant_msg_at", "last_activity_at", "debriefed_at", "duration_min",
     # volume
@@ -207,6 +213,9 @@ class Conv:
         self.later_ratings = self.ratings[2:]
         self.phase = d.get("conversation_phase") or "unknown"
         self.intro_sent = bool(d.get("intro_sent"))
+        self.screening = d.get("screening") or {}
+        self.screened_out_at = _utc(d.get("screened_out_at"))
+        self.page_loads = int(d.get("page_loads") or 0)
         pv = d.get("prompt_variant") or ""
         self.variant = pv.split("_prompt_", 1)[1] if "_prompt_" in pv else pv
         referrals = d.get("referrals") or []
@@ -234,6 +243,11 @@ class Conv:
             "phase": self.phase,
             "outcome": outcome_of(self.phase, self.intro_sent, self.last_activity_at, now, self.debriefed_at is not None),
             "intro_sent": self.intro_sent,
+            "screening_age_18": self.screening.get("age_18"),
+            "screening_eligible_voter": self.screening.get("eligible_voter"),
+            "screening_passed": self.screening.get("passed"),
+            "screened_out_at": _iso(self.screened_out_at),
+            "page_loads": self.page_loads,
             "started_at": _iso(self.started_at),
             "last_activity_at": _iso(self.last_activity_at),
             "debriefed_at": _iso(self.debriefed_at),

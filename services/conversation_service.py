@@ -49,7 +49,14 @@ class BotResponse:
     text_messages: list[str] = dataclasses.field(default_factory=list)
     send_trust_flow: bool = False
     trust_flow_language: str = "EN"
-    trust_flow_prompt_key: str = "intro"
+    trust_flow_prompt_key: str = "baseline"
+    # Eligibility screening question to show next ("q1" / "q2"), rendered as
+    # buttons on the web and as a text question with options on WhatsApp.
+    send_screening: str | None = None
+
+
+def _initial_phase() -> str:
+    return "awaiting_screening" if settings.SCREENING_ENABLED else "awaiting_initial_rating"
 
 
 async def handle_incoming_message(
@@ -77,7 +84,8 @@ async def handle_incoming_message(
     full_prompt_name = f"{language}_prompt_{base_variant}"
 
     conversation = firebase.get_or_create_conversation(
-        client, phone_number, language=language, variant=full_prompt_name
+        client, phone_number, language=language, variant=full_prompt_name,
+        initial_phase=_initial_phase(),
     )
 
     # 2. Persist raw webhook metadata (first-touch raw message, contact profile,
@@ -100,6 +108,7 @@ async def handle_incoming_message(
             f"Variant: {conversation.prompt_variant}\n"
             f"Initial belief level: {belief}\n"
             f"Phase: {conversation.conversation_phase}\n"
+            f"Screening: {conversation.screening or 'not started'}\n"
             f"Turn count: {conversation.user_turn_count} "
             f"(debrief after {settings.DEBRIEF_AFTER_TURNS})\n"
             f"Ratings: {len(conversation.feeling_array)} "
@@ -137,7 +146,16 @@ async def handle_incoming_message(
     # 3. Route based on conversation phase
     phase = conversation.conversation_phase
 
-    if phase == "awaiting_initial_rating":
+    if phase == "awaiting_screening":
+        return _handle_screening(client, phone_number, message_text, conversation, msg_type)
+
+    elif phase == "screened_out":
+        # Failed eligibility: repeat the closing message, never start the study.
+        return BotResponse(
+            text_messages=[trust_service.get_trust_prompt(conversation.language, "screening_closing")]
+        )
+
+    elif phase == "awaiting_initial_rating":
         return await _handle_initial_rating(
             client, phone_number, message_text, conversation, msg_type
         )
@@ -163,19 +181,70 @@ async def handle_incoming_message(
         )
 
 
+def _handle_screening(client, phone_number, message_text, conversation, msg_type) -> BotResponse:
+    """Eligibility screening before the baseline rating.
+
+    First contact: intro (consent) text + question 1. Each answer is stored as
+    it arrives. "sim" to both questions -> phase awaiting_initial_rating and the
+    baseline rating prompt. Anything else -> closing message, phase screened_out.
+    The document, with all ad/page metadata, exists from the first contact on.
+    """
+    lang = conversation.language
+
+    if not conversation.intro_sent:
+        firebase.update_intro_sent(client, phone_number)
+        q = trust_service.pending_screening_question(conversation.screening)
+        return BotResponse(
+            text_messages=[trust_service.get_trust_prompt(lang, "intro")],
+            send_screening=q["key"], trust_flow_language=lang,
+        )
+
+    q = trust_service.pending_screening_question(conversation.screening)
+    if q is None:  # all answered already (should not happen); re-evaluate
+        return _finish_screening(client, phone_number, conversation)
+
+    answer = trust_service.parse_screening_answer(message_text, q, msg_type)
+    if answer is None:
+        return BotResponse(
+            text_messages=[trust_service.get_trust_prompt(lang, f"screening_invalid_{q['key']}")],
+            send_screening=q["key"], trust_flow_language=lang,
+        )
+
+    firebase.save_screening_answer(client, phone_number, conversation, q["field"], answer)
+    if answer not in q["pass"]:
+        firebase.finish_screening(client, phone_number, conversation, passed=False)
+        return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, "screening_closing")])
+
+    nxt = trust_service.pending_screening_question(conversation.screening)
+    if nxt is not None:
+        return BotResponse(send_screening=nxt["key"], trust_flow_language=lang)
+    return _finish_screening(client, phone_number, conversation)
+
+
+def _finish_screening(client, phone_number, conversation) -> BotResponse:
+    """All screening questions answered: pass only if every answer is a passing one."""
+    lang = conversation.language
+    passed = all(conversation.screening.get(q["field"]) in q["pass"] for q in trust_service.SCREENING_QUESTIONS)
+    firebase.finish_screening(client, phone_number, conversation, passed=passed)
+    if not passed:
+        return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, "screening_closing")])
+    return BotResponse(send_trust_flow=True, trust_flow_language=lang, trust_flow_prompt_key="baseline")
+
+
 async def _handle_initial_rating(
     client, phone_number, message_text, conversation, msg_type
 ) -> BotResponse:
     """Handle messages when we're waiting for the first trust rating."""
     lang = conversation.language
 
-    # First message ever — send the intro, don't process their message
+    # First message ever (screening disabled) — intro + baseline prompt, don't process their message
     if not conversation.intro_sent:
         firebase.update_intro_sent(client, phone_number)
         return BotResponse(
+            text_messages=[trust_service.get_trust_prompt(lang, "intro")],
             send_trust_flow=True,
             trust_flow_language=lang,
-            trust_flow_prompt_key="intro",
+            trust_flow_prompt_key="baseline",
         )
 
     if msg_type == "interactive":
@@ -188,7 +257,7 @@ async def _handle_initial_rating(
             text_messages=[trust_service.get_trust_prompt(lang, "invalid")],
             send_trust_flow=True,
             trust_flow_language=lang,
-            trust_flow_prompt_key="intro",
+            trust_flow_prompt_key="baseline",
         )
 
     # Valid rating — save (slot "pre") and transition to normal conversation

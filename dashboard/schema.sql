@@ -12,8 +12,13 @@ CREATE TABLE IF NOT EXISTS wa_conversations (
     variant              TEXT,            -- e.g. A_control_condition
     prompt_variant       TEXT,            -- e.g. PT_prompt_A_control_condition
     language             TEXT,
-    phase                TEXT,            -- awaiting_initial_rating | normal | awaiting_check_in_rating | ended
+    phase                TEXT,            -- awaiting_screening | screened_out | awaiting_initial_rating | normal | awaiting_check_in_rating | ended
     intro_sent           BOOLEAN,
+    screening_age_18     TEXT,            -- sim | nao | NULL (not answered)
+    screening_eligible_voter TEXT,        -- sim | nao | nao_sei | NULL
+    screening_passed     BOOLEAN,
+    screened_out_at      TIMESTAMPTZ,
+    page_loads           INTEGER,         -- web: times the page was opened/resumed
     started_at           TIMESTAMPTZ,     -- Meta timestamp of the first message, else first stored message
     last_user_msg_at     TIMESTAMPTZ,
     last_assistant_msg_at TIMESTAMPTZ,
@@ -37,6 +42,11 @@ CREATE TABLE IF NOT EXISTS wa_conversations (
 ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_pre INTEGER;
 ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_post INTEGER;
 ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS later_ratings JSONB;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screening_age_18 TEXT;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screening_eligible_voter TEXT;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screening_passed BOOLEAN;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screened_out_at TIMESTAMPTZ;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS page_loads INTEGER;
 CREATE INDEX IF NOT EXISTS wa_conversations_started_idx   ON wa_conversations (started_at);
 CREATE INDEX IF NOT EXISTS wa_conversations_debriefed_idx ON wa_conversations (debriefed_at);
 CREATE INDEX IF NOT EXISTS wa_conversations_phase_idx     ON wa_conversations (phase);
