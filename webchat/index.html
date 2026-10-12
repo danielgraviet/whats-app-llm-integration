@@ -61,6 +61,7 @@
   footer { flex: none; text-align: center; font-size: 11px; color: #54656f; padding: 4px 12px 6px; background: #f0f2f5; }
   #chat { display: flex; flex-direction: column; }
 </style>
+<!--META_PIXEL-->
 </head>
 <body>
 <header>
@@ -80,6 +81,7 @@
   const chat = $("#chat"), form = $("#form"), input = $("#input"), send = $("#send");
   const KEY = "pesquisa_session_id";
   let T = {}, sid = null, busy = false, ended = false, pendingRating = null, pendingScreening = null;
+  let userTurns = 0, completed = false, creative = null;   // for the Meta Pixel events below
 
   // ---------- helpers ----------
   const api = async (path, body) => {
@@ -96,6 +98,21 @@
   const typing = (on) => { if (on && !typingEl) { typingEl = document.createElement("div"); typingEl.className = "msg bot typing"; typingEl.innerHTML = "<i></i><i></i><i></i>"; chat.append(typingEl); scroll(); }
     if (!on && typingEl) { typingEl.remove(); typingEl = null; } };
   const setInput = (enabled) => { input.disabled = false; send.disabled = false; if (enabled) input.focus({ preventScroll: true }); };
+
+  // ---------- Meta Pixel custom events (ad campaign optimisation; see README "Meta Pixel") ----------
+  // Each event fires once per study session: the guard is keyed by the session id and kept in
+  // localStorage (the session itself lives there), so a reload, back navigation or a later visit
+  // never repeats it. Only the ad creative (utm_content) is attached; never answers or ids.
+  const firedStore = () => { try { if (localStorage) return localStorage; } catch {} try { return sessionStorage; } catch {} return null; };
+  const fired = {};
+  const trackOnce = (eventName) => {
+    const key = `fb_${eventName}_${sid}`; const store = firedStore();
+    if (fired[key]) return; let seen = false; try { seen = !!(store && store.getItem(key)); } catch {}
+    fired[key] = true; if (seen) return;
+    try { store && store.setItem(key, "1"); } catch {}
+    if (typeof fbq !== "function") return;   // no pixel configured, or blocked by the browser
+    try { fbq("trackCustom", eventName, creative ? { criativo: creative } : {}); } catch {}
+  };
 
   // ---------- eligibility screening: one question at a time, answered with buttons ----------
   function showScreening(q) {
@@ -158,6 +175,7 @@
       else { bubble(res.rating.prompt, "bot"); showRating(res.rating); }
     }
     if (res.ended && !ended) { ended = true; sysNote(T.ended); }
+    if (res.completed && !completed) { completed = true; trackOnce("PesquisaConcluida"); }   // post rating just recorded
     busy = false;
     if (!res.rating && !res.screening && !res.ended && !res.screened_out) setInput(true);
   }
@@ -174,6 +192,7 @@
       sysNote(T.rate_pending); return;
     }
     input.value = ""; input.style.height = "auto"; bubble(text, "me");
+    if (!text.startsWith("/")) { if (userTurns === 0) trackOnce("ConversaIniciada"); userTurns++; }   // first real message of the session
     await turn(() => api(`api/session/${sid}/message`, { text }));
   });
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 120) + "px"; });
@@ -195,6 +214,9 @@
     let st;
     try { st = await api("api/session", meta); } catch (e) { sysNote(T.error || "Erro ao iniciar."); return; }
     sid = st.session_id; try { localStorage.setItem(KEY, sid); } catch {}
+    creative = st.creative || params.get("utm_content") || null;
+    completed = !!st.completed;
+    userTurns = st.resumed ? st.history.filter((m) => m.role === "user").length : 0;
     if (st.resumed) {
       // replay history, then whatever is pending
       for (const m of st.history) bubble(m.content, m.role === "user" ? "me" : "bot");

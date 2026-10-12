@@ -55,6 +55,56 @@ Same document shape as WhatsApp, in collection `web_conversations`, keyed by a r
 
 **Ad setup:** give every ad a distinct `utm_content` (e.g. `ad_17`) in its destination URL. Facebook adds `fbclid` on its own. There is no server-side click attribution on the web like WhatsApp's referral object, so the URL parameters are the only attribution.
 
+## Meta Pixel
+
+The page carries the study's Meta Pixel (dataset) so the Facebook campaigns can
+be optimised and measured per creative (brief: *Meta Pixel Implementation
+Brief*, Oct 2026). Three events, names exactly as in the brief (case-sensitive,
+Portuguese by design):
+
+| Event | Type | Fires when | Guard |
+|---|---|---|---|
+| `PageView` | standard | every page load (the base code is in `<head>`) | none, by design |
+| `ConversaIniciada` | custom | the participant submits their **first text message** of the session (after screening and the pre rating; `/` developer commands do not count) | once per session |
+| `PesquisaConcluida` | custom | the **post rating** is stored (`rating_post`, the second slider, turn 6 in every condition), i.e. the session has become a research-usable pre/post pair | once per session |
+
+Both custom events carry one parameter, `criativo`, with the ad's
+`utm_content` (the four creatives: `skeptical_frame`, `open_question`,
+`voice_matters`, `curiosity_frame`). Nothing else is ever sent to Meta: no
+session id, no answers, no ratings, no text. The server returns the creative
+of the *first* visit with the session state (`creative`), so a participant who
+resumes later from a URL without parameters is still attributed correctly.
+
+"Once per session" means once per study session: the guard is stored in
+`localStorage` under `fb_<event>_<session id>` (the session id itself lives
+there), so a reload, back navigation, a closed tab or a later visit never
+repeats an event. `?new=1` or `/reset` creates a new session and the events
+fire again for it. The page also knows the server state (`completed`, number of
+user turns in the history), so a cleared browser cannot re-fire
+`ConversaIniciada` for a conversation that already has messages.
+
+The pixel id is `META_PIXEL_ID` in `webchat/.env` (default: the study's pixel
+`1276196112839237`; `--demo` defaults to none). Set it empty to serve the page
+without the pixel, e.g. on a staging host. `/health` reports `meta_pixel:
+true|false`. The base code is injected into `index.html` at the
+`<!--META_PIXEL-->` placeholder when the page is served. If a browser blocks
+`fbevents.js` (ad blocker), Meta's own queue stub swallows the calls and the
+page works unchanged; if there is no pixel at all, `fbq` is undefined and the
+events are skipped.
+
+**Consent.** The base code fires `PageView` on load, before the participant
+reads the intro and consent text, exactly as the brief's base code does. If
+the IRB protocol requires the pixel to run only after consent, move the
+`<!--META_PIXEL-->` injection to after the first screening answer instead; the
+custom events already fire after consent by construction.
+
+To verify in production: Meta Events Manager > Test events, or the Meta Pixel
+Helper browser extension, with a `?utm_content=...` URL; go through screening,
+the slider, one message (ConversaIniciada), six messages and the second slider
+(PesquisaConcluida). `e2e/test_webchat_pixel_browser.py` does the same walk in
+headless Chrome against a demo server (needs `pip install playwright` and
+Chrome; skipped otherwise).
+
 ## Install on pccgo.cs.byu.edu
 
 Requires **Python 3.10 or newer** (the code uses `X | None` annotations and

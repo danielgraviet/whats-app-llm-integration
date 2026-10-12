@@ -85,3 +85,52 @@ def test_ui_text_has_percent_scale(http):
     assert t["rating_min"] == 0 and t["rating_max"] == 100 and t["rate_unit"] == "%"
     assert t["rate_low"] == "Não confio nem um pouco" and t["rate_high"] == "Confio totalmente"
     assert http.get("health").json()["screening_enabled"] is True
+
+
+# ---------------------------------------------------------------------------
+# Meta Pixel (Facebook ad attribution)
+# ---------------------------------------------------------------------------
+def test_pixel_base_code_is_injected_only_when_configured(http, monkeypatch):
+    monkeypatch.setattr(webapp, "META_PIXEL_ID", "")
+    page = http.get("/").text
+    assert "fbq('init'" not in page and "fbevents.js" not in page and "<!--META_PIXEL-->" not in page
+    assert http.get("/health").json()["meta_pixel"] is False
+
+    monkeypatch.setattr(webapp, "META_PIXEL_ID", "1276196112839237")
+    page = http.get("/").text
+    head = page.split("</head>")[0]
+    assert "fbq('init', '1276196112839237')" in head and "fbq('track', 'PageView')" in head
+    assert "connect.facebook.net/en_US/fbevents.js" in head
+    assert 'src="https://www.facebook.com/tr?id=1276196112839237&ev=PageView&noscript=1"' in head
+    assert page.count("Meta Pixel Code") == 2   # start + end markers, exactly one block
+    assert http.get("/health").json()["meta_pixel"] is True
+    # the page script fires the two custom events with the exact (case-sensitive) names from the brief
+    assert 'trackOnce("ConversaIniciada")' in page and 'trackOnce("PesquisaConcluida")' in page
+    assert "criativo: creative" in page
+
+
+def test_creative_and_completed_fields_drive_the_custom_events(http):
+    st = http.post("api/session", json=META).json()
+    sid = st["session_id"]
+    assert st["creative"] == "ad_17" and st["completed"] is False
+    for q in ("q1", "q2"):
+        http.post(f"api/session/{sid}/screening", json={"question": q, "answer": "sim"})
+    r = http.post(f"api/session/{sid}/rating", json={"score": 40}).json()
+    assert r["completed"] is False                      # pre rating alone is not a completion
+    # resumed without utm_content in the URL: the creative is remembered from the first visit
+    st = http.post("api/session", json={**META, "query": {}, "session_id": sid}).json()
+    assert st["resumed"] and st["creative"] == "ad_17" and st["completed"] is False
+    for i in range(6):
+        r = http.post(f"api/session/{sid}/message", json={"text": f"mensagem {i}"}).json()
+        assert r["completed"] is False
+    assert r["rating"]["kind"] == "check_in"
+    r = http.post(f"api/session/{sid}/rating", json={"score": 60}).json()
+    assert r["completed"] is True                       # post rating recorded -> PesquisaConcluida
+    d = webapp.CLIENT.collection(webapp.firebase.COLLECTION).document(sid).get().to_dict()
+    assert d["rating_pre"] == 40 and d["rating_post"] == 60
+    assert http.post("api/session", json={**META, "session_id": sid}).json()["completed"] is True
+
+
+def test_session_without_ad_parameters_has_no_creative(http):
+    st = http.post("api/session", json={**META, "query": {}}).json()
+    assert st["creative"] is None

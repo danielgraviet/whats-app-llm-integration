@@ -34,6 +34,7 @@ import datetime as dt
 import hashlib
 import logging
 import os
+import re
 import secrets
 import time
 from pathlib import Path
@@ -42,7 +43,7 @@ from typing import Any
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 WEBCHAT_DIR = Path(__file__).resolve().parent
@@ -96,6 +97,31 @@ def _git_sha() -> str:
 
 GIT_SHA = _git_sha()
 MAX_MESSAGE_CHARS = int(os.getenv("WEBCHAT_MAX_MESSAGE_CHARS", "2000"))
+# Meta Pixel for the Facebook ad campaigns (see webchat/README.md, "Meta Pixel").
+# The base code fires PageView on load; the page fires ConversaIniciada on the
+# first message and PesquisaConcluida when the post rating is recorded, each
+# tagged with the ad's utm_content. Empty = no pixel at all (demo default).
+META_PIXEL_ID = os.getenv("META_PIXEL_ID", "" if DEMO else "1276196112839237").strip()
+if not re.fullmatch(r"[0-9]*", META_PIXEL_ID):
+    sys.exit(f"META_PIXEL_ID must be digits only, got {META_PIXEL_ID!r}")
+
+META_PIXEL_SNIPPET = """<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '%(id)s');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=%(id)s&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->"""
 # Developer commands typed as messages, exactly as on WhatsApp:
 #   /info            condition, phase, turn count, ratings, system prompt
 #   /reset           delete this session's document; the page reloads as a brand-new
@@ -284,7 +310,20 @@ def state_of(sid: str) -> dict:
             "ratings": [r.get("score") for r in d.get("feeling_array", [])],
             # so a reload of a finished conversation still shows the debrief (it is not part of history)
             "debrief": trust_service.get_trust_prompt(lang, "debrief") if phase == "ended" else None,
-            "debriefed": bool(d.get("debriefed_at"))}
+            "debriefed": bool(d.get("debriefed_at")),
+            # Ad-attribution fields for the Meta Pixel events (never the session id or any answer):
+            # 'completed' flips to true the moment the post rating is stored, which is the
+            # research-usable outcome; 'creative' is the ad's utm_content from the first visit.
+            "completed": d.get("rating_post") is not None,
+            "creative": creative_of(d)}
+
+
+def creative_of(d: dict) -> str | None:
+    """utm_content of the visit that created the session, so a resumed page keeps the ad's creative name."""
+    raw = d.get("first_message_raw") or {}
+    params = (raw.get("referral") or {}).get("params") or {}
+    query = (raw.get("web") or {}).get("query") or {}
+    return params.get("utm_content") or query.get("utm_content") or None
 
 
 def shape(sid: str, bot) -> dict:
@@ -295,22 +334,30 @@ def shape(sid: str, bot) -> dict:
     if bot.send_screening:
         out["screening"] = screening_payload(bot.send_screening, bot.trust_flow_language)
     st = state_of(sid)
-    out.update({"phase": st["phase"], "ended": st["ended"], "screened_out": st["screened_out"], "user_turn_count": st["user_turn_count"]})
+    out.update({"phase": st["phase"], "ended": st["ended"], "screened_out": st["screened_out"], "user_turn_count": st["user_turn_count"],
+                "completed": st["completed"]})
     return out
 
 
 # ----------------------------------------------------------------------------
 # routes
 # ----------------------------------------------------------------------------
+def render_index() -> str:
+    """index.html with the Meta Pixel base code in <head> (or nothing, when META_PIXEL_ID is empty)."""
+    html = (WEBCHAT_DIR / "index.html").read_text(encoding="utf-8")
+    pixel = META_PIXEL_SNIPPET % {"id": META_PIXEL_ID} if META_PIXEL_ID else ""
+    return html.replace("<!--META_PIXEL-->", pixel, 1)
+
+
 @app.api_route("/", methods=["GET", "HEAD"])
 def index():
-    return FileResponse(WEBCHAT_DIR / "index.html", headers={"Cache-Control": "no-store"})
+    return HTMLResponse(render_index(), headers={"Cache-Control": "no-store"})
 
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "healthy", "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION,
-            "screening_enabled": settings.SCREENING_ENABLED,
+            "screening_enabled": settings.SCREENING_ENABLED, "meta_pixel": bool(META_PIXEL_ID),
             "rating_scale": [settings.TRUST_RATING_MIN, settings.TRUST_RATING_MAX], "check_in_interval": settings.TRUST_CHECK_INTERVAL,
             "debrief_after_turns": settings.DEBRIEF_AFTER_TURNS, "continue_after_debrief": settings.CONTINUE_AFTER_DEBRIEF}
 
