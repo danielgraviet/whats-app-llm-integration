@@ -134,3 +134,20 @@ def test_creative_and_completed_fields_drive_the_custom_events(http):
 def test_session_without_ad_parameters_has_no_creative(http):
     st = http.post("api/session", json={**META, "query": {}}).json()
     assert st["creative"] is None
+
+
+# ---------------------------------------------------------------------------
+# /health probes Firestore so a dead store is visible to monitoring
+# ---------------------------------------------------------------------------
+def test_health_reports_firestore_and_fails_when_it_is_down(http, monkeypatch):
+    r = http.get("health")
+    assert r.status_code == 200 and r.json()["status"] == "healthy" and r.json()["firestore"] == "ok"
+
+    class Broken:
+        def collection(self, name):
+            raise RuntimeError("429 Quota exceeded")
+
+    monkeypatch.setattr(webapp, "CLIENT", Broken())
+    r = http.get("health")
+    assert r.status_code == 503
+    assert r.json()["status"] == "unhealthy" and r.json()["firestore"] == "RuntimeError: 429 Quota exceeded"

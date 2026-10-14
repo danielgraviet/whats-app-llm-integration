@@ -22,7 +22,7 @@ class _Doc:
 
 class _DocRef:
     def __init__(self, store, id): self._s, self.id = store, id
-    def get(self, transaction=None): return _Doc(self.id, self._s.get(self.id))
+    def get(self, transaction=None, **kwargs): return _Doc(self.id, self._s.get(self.id))   # kwargs: timeout= etc.
     def set(self, data, merge=False):
         cur = dict(self._s.get(self.id) or {}) if merge else {}
         for k, v in data.items():

@@ -43,7 +43,7 @@ from typing import Any
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 WEBCHAT_DIR = Path(__file__).resolve().parent
@@ -354,12 +354,28 @@ def index():
     return HTMLResponse(render_index(), headers={"Cache-Control": "no-store"})
 
 
+def firestore_check() -> str:
+    """One read of a document that need not exist: proves credentials, network and quota.
+
+    Returns "ok" or "<ExceptionType>: <message>". Never raises, so a Firestore
+    outage turns /health into a 503 instead of a crash.
+    """
+    try:
+        CLIENT.collection(firebase.COLLECTION).document("_health").get(timeout=5)
+        return "ok"
+    except Exception as e:  # noqa: BLE001
+        return f"{type(e).__name__}: {str(e)[:200]}"
+
+
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
-    return {"status": "healthy", "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION,
+    fs = firestore_check()
+    body = {"status": "healthy" if fs == "ok" else "unhealthy", "firestore": fs,
+            "version": GIT_SHA or "unknown", "demo": DEMO, "collection": firebase.COLLECTION,
             "screening_enabled": settings.SCREENING_ENABLED, "meta_pixel": bool(META_PIXEL_ID),
             "rating_scale": [settings.TRUST_RATING_MIN, settings.TRUST_RATING_MAX], "check_in_interval": settings.TRUST_CHECK_INTERVAL,
             "debrief_after_turns": settings.DEBRIEF_AFTER_TURNS, "continue_after_debrief": settings.CONTINUE_AFTER_DEBRIEF}
+    return JSONResponse(body, status_code=200 if fs == "ok" else 503)
 
 
 @app.get("/api/text")
