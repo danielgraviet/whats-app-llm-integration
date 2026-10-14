@@ -45,7 +45,10 @@ def init_firestore():
         else:
             raise ValueError("Set FIREBASE_CREDS_JSON or FIREBASE_CREDS_PATH")
 
-        client = firestore.Client(project="whatsapp-llm-test", credentials=credentials)
+        # The key file names its own project; FIRESTORE_PROJECT is an override
+        # for the rare case of a service account used across projects.
+        project = os.getenv("FIRESTORE_PROJECT") or credentials.project_id
+        client = firestore.Client(project=project, credentials=credentials)
         return client
     except Exception:
         logger.exception("Failed to create Firestore client")
