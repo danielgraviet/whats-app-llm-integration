@@ -295,7 +295,11 @@ async def _handle_initial_rating(
         client, phone_number, "normal", user_turn_count=0
     )
     key = "rating_received_control" if _is_control(conversation) else "rating_received"
-    return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, key)])
+    opener = trust_service.get_trust_prompt(lang, key)
+    # The opener is sent by the code, not the model; put it in the history so the
+    # model sees its own first message and does not repeat it or ignore it.
+    firebase.save_message(client, phone_number, opener, role="assistant")
+    return BotResponse(text_messages=[opener])
 
 
 async def _handle_check_in_rating(
@@ -328,9 +332,12 @@ async def _handle_check_in_rating(
     if pending:
         messages.append(pending)
 
-    # Control condition: the second rating closes the pets segment; move on to elections.
+    # Control condition: the second rating closes the dog segment; move on to the
+    # voting machines. The transition is sent by the code and stored in the history.
     if slot == "post" and _is_control(conversation):
-        messages.append(trust_service.get_trust_prompt(lang, "control_transition"))
+        transition = trust_service.get_trust_prompt(lang, "control_transition")
+        firebase.save_message(client, phone_number, transition, role="assistant")
+        messages.append(transition)
 
     # If the debrief turn landed on a check-in turn, the check-in ran first so
     # the rating is collected; now deliver the held reply and the debrief.
