@@ -333,11 +333,13 @@ async def _handle_check_in_rating(
         messages.append(pending)
 
     # Control condition: the second rating closes the dog segment; move on to the
-    # voting machines. The transition is sent by the code and stored in the history.
+    # voting machines. The fixed transition replaces the held reply to the sixth
+    # dog message (the model tends to write a transition of its own there, which
+    # would otherwise be sent twice). It is stored in the history.
     if slot == "post" and _is_control(conversation):
         transition = trust_service.get_trust_prompt(lang, "control_transition")
         firebase.save_message(client, phone_number, transition, role="assistant")
-        messages.append(transition)
+        messages = [transition]
 
     # If the debrief turn landed on a check-in turn, the check-in ran first so
     # the rating is collected; now deliver the held reply and the debrief.
