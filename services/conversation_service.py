@@ -18,13 +18,23 @@ def _control_stage2(conversation) -> bool:
 
 
 def _rating_slot(conversation) -> str | None:
-    """Which analysis slot the rating about to be saved fills."""
+    """Which analysis slot the rating about to be saved fills: "pre" for the
+    baseline, "post" for the first check-in (after the 6th message), None later.
+    An exit rating is saved with its own slot by end_conversation()."""
+    slots = {r.slot for r in conversation.feeling_array if r.slot}
     n = len(conversation.feeling_array)
-    if n == 0:
+    if n == 0 and "pre" not in slots:
         return "pre"
-    if n == 1:
+    if "post" not in slots and n == 1:
         return "post"
     return None
+
+
+def last_rating_turn(conversation) -> int | None:
+    """message_index of the most recent rating, or None if none yet."""
+    if not conversation.feeling_array:
+        return None
+    return max(r.message_index for r in conversation.feeling_array)
 
 
 def _initial_belief_level(conversation) -> int | None:
@@ -67,24 +77,26 @@ async def handle_incoming_message(
     raw_message: dict | None = None,
     contacts: list | None = None,
     allow_dev_commands: bool = True,
+    rating_events: list | None = None,
 ) -> BotResponse:
     """Main entry point. Routes to the correct handler based on conversation phase.
 
     allow_dev_commands=False (web deployment) treats "/info", "/reset" and
     "/lang" as ordinary participant text instead of developer commands.
 
+    rating_events: the participant's button taps (with timestamps) when the
+    message is a rating reply; stored with the rating.
+
     raw_message / contacts are the untouched webhook objects from Meta. They are
     stored on the conversation for research metadata (see firebase.record_metadata).
     Condition assignment is random and independent of any ad referral by design.
     """
 
-    # 1. Get or create conversation (assign variant if new)
-    base_variant = prompt_service.assign_variant()
+    # 1. Get or create conversation. The study arm is drawn later, once the
+    #    participant has passed the baseline high-trust filter.
     language = "PT"
-    full_prompt_name = f"{language}_prompt_{base_variant}"
-
     conversation = firebase.get_or_create_conversation(
-        client, phone_number, language=language, variant=full_prompt_name,
+        client, phone_number, language=language, variant=prompt_service.UNASSIGNED,
         initial_phase=_initial_phase(),
     )
 
@@ -98,25 +110,31 @@ async def handle_incoming_message(
     # Dev commands — bypass all state logic
     if allow_dev_commands and message_text.strip().lower() == "/info":
         belief = _initial_belief_level(conversation)
-        system_prompt = prompt_service.get_prompt(
-            language=conversation.language,
-            variant=conversation.prompt_variant,
-            user_belief_level=belief,
-        )
+        if conversation.prompt_variant:
+            system_prompt = prompt_service.get_prompt(
+                language=conversation.language,
+                variant=conversation.prompt_variant,
+                user_belief_level=belief,
+                control_stage2=_control_stage2(conversation),
+            )
+        else:
+            system_prompt = "(no arm assigned yet: drawn after the baseline questions)"
         info_text = (
             f"[Dev Info]\n"
-            f"Variant: {conversation.prompt_variant}\n"
-            f"Initial belief level: {belief}\n"
-            f"Phase: {conversation.conversation_phase}\n"
+            f"Variant: {conversation.prompt_variant or 'unassigned'}\n"
+            f"Initial belief level (urnas): {belief}\n"
+            f"Phase: {conversation.conversation_phase}"
+            f"{' (' + conversation.screened_out_reason + ')' if conversation.screened_out_reason else ''}\n"
             f"Screening: {conversation.screening or 'not started'}\n"
             f"Turn count: {conversation.user_turn_count} "
-            f"(debrief after {settings.DEBRIEF_AFTER_TURNS})\n"
+            f"(ratings every {settings.TRUST_CHECK_INTERVAL}, ends after the rating at {settings.DEBRIEF_AFTER_TURNS})\n"
             f"Ratings: {len(conversation.feeling_array)} "
-            f"(pre={conversation.rating_pre}, post={conversation.rating_post}, "
+            f"(pre={conversation.rating_pre}/{conversation.rating_pre_system}, "
+            f"post={conversation.rating_post}/{conversation.rating_post_system}, "
+            f"exit={conversation.rating_exit}/{conversation.rating_exit_system}; urnas/system, "
             f"scale {settings.TRUST_RATING_MIN}-{settings.TRUST_RATING_MAX})\n"
-            f"Debriefed: {bool(conversation.debriefed_at)} "
-            f"(due after turn {trust_service.debrief_turn(prompt_service.base_variant(conversation.prompt_variant))}, "
-            f"{'conversation continues' if settings.CONTINUE_AFTER_DEBRIEF else 'conversation ends'})\n"
+            f"Debriefed: {bool(conversation.debriefed_at)}"
+            f"{' (' + conversation.ended_reason + ')' if conversation.ended_reason else ''}\n"
             f"Ad referrals: {len(conversation.referrals)}\n"
             f"First-message raw captured: {bool(conversation.first_message_raw)}\n\n"
             f"--- System Prompt ---\n{system_prompt}"
@@ -157,12 +175,12 @@ async def handle_incoming_message(
 
     elif phase == "awaiting_initial_rating":
         return await _handle_initial_rating(
-            client, phone_number, message_text, conversation, msg_type
+            client, phone_number, message_text, conversation, msg_type, rating_events
         )
 
     elif phase == "awaiting_check_in_rating":
         return await _handle_check_in_rating(
-            client, phone_number, message_text, conversation, msg_type
+            client, phone_number, message_text, conversation, msg_type, rating_events
         )
 
     elif phase == "ended":
@@ -232,9 +250,9 @@ def _finish_screening(client, phone_number, conversation) -> BotResponse:
 
 
 async def _handle_initial_rating(
-    client, phone_number, message_text, conversation, msg_type
+    client, phone_number, message_text, conversation, msg_type, rating_events=None
 ) -> BotResponse:
-    """Handle messages when we're waiting for the first trust rating."""
+    """Handle messages when we're waiting for the baseline trust questions."""
     lang = conversation.language
 
     # First message ever (screening disabled) — intro + baseline prompt, don't process their message
@@ -260,8 +278,19 @@ async def _handle_initial_rating(
             trust_flow_prompt_key="baseline",
         )
 
-    # Valid rating — save (slot "pre") and transition to normal conversation
-    firebase.save_trust_rating(client, phone_number, score, message_index=0, slot=_rating_slot(conversation))
+    # Valid rating: save it (slot "pre") even if the participant is filtered out.
+    firebase.save_trust_rating(client, phone_number, score, message_index=0, slot=_rating_slot(conversation),
+                               events=rating_events)
+
+    # High-trust filter: 7 on the voting-machine question ends the session here,
+    # with the same closing message as the screening. No arm, no conversation.
+    if trust_service.is_high_trust(score["urnas"]):
+        firebase.screen_out(client, phone_number, conversation, reason="high_trust")
+        return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, "screening_closing")])
+
+    # Passed: draw the study arm now, then start the conversation.
+    if not conversation.prompt_variant:
+        firebase.assign_variant(client, phone_number, conversation, f"{lang}_prompt_{prompt_service.assign_variant()}")
     firebase.update_conversation_phase(
         client, phone_number, "normal", user_turn_count=0
     )
@@ -270,7 +299,7 @@ async def _handle_initial_rating(
 
 
 async def _handle_check_in_rating(
-    client, phone_number, message_text, conversation, msg_type
+    client, phone_number, message_text, conversation, msg_type, rating_events=None
 ) -> BotResponse:
     """Handle messages when we're waiting for a periodic check-in rating."""
     lang = conversation.language
@@ -291,7 +320,8 @@ async def _handle_check_in_rating(
     # Valid rating — save (slot "post" for the second rating) and return to normal conversation
     slot = _rating_slot(conversation)
     firebase.save_trust_rating(
-        client, phone_number, score, message_index=conversation.user_turn_count, slot=slot
+        client, phone_number, score, message_index=conversation.user_turn_count, slot=slot,
+        events=rating_events,
     )
     pending = firebase.get_and_clear_pending_response(client, phone_number)
     messages = []
@@ -308,12 +338,41 @@ async def _handle_check_in_rating(
                                     prompt_service.base_variant(conversation.prompt_variant),
                                     conversation.debriefed_at is not None):
         end = not settings.CONTINUE_AFTER_DEBRIEF
-        firebase.mark_debriefed(client, phone_number, end_conversation=end)
+        firebase.mark_debriefed(client, phone_number, end_conversation=end, reason="limit")
         messages.append(trust_service.get_trust_prompt(lang, "debrief" if end else "debrief_open"))
         return BotResponse(text_messages=messages)
 
     firebase.update_conversation_phase(client, phone_number, "normal")
     return BotResponse(text_messages=messages)
+
+
+async def end_conversation(client, phone_number: str, choice: str, rating: dict | None = None,
+                           rating_events: list | None = None) -> BotResponse:
+    """The participant ends the conversation early: the "Encerrar conversa" button
+    (choice "rated" with the optional exit answers, "skipped", or "after_rating"
+    when pressed right after a regular rating) or the page's inactivity timer
+    (choice "inactivity"). Saves the exit rating if given, records the choice,
+    sends the debrief and moves the conversation to the terminal 'ended' phase.
+    Idempotent: an already-ended conversation just gets the debrief again.
+    """
+    conversation = firebase.get_or_create_conversation(
+        client, phone_number, language="PT", variant=prompt_service.UNASSIGNED, initial_phase=_initial_phase())
+    lang = conversation.language
+    if conversation.conversation_phase == "ended":
+        return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, "debrief")])
+    if conversation.conversation_phase in ("awaiting_screening", "screened_out", "awaiting_initial_rating"):
+        # Nothing to debrief: the study conversation never started.
+        key = "screening_closing" if conversation.conversation_phase == "screened_out" else "conversation_ended"
+        return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, key)])
+    if rating is not None:
+        firebase.save_trust_rating(client, phone_number, rating, message_index=conversation.user_turn_count,
+                                   slot="exit", events=rating_events)
+    if choice != "inactivity":
+        firebase.record_exit(client, phone_number, choice, conversation.user_turn_count)
+    firebase.get_and_clear_pending_response(client, phone_number)   # a held reply, if the timer fired mid-rating
+    firebase.mark_debriefed(client, phone_number, end_conversation=True,
+                            reason="inactivity" if choice == "inactivity" else "button")
+    return BotResponse(text_messages=[trust_service.get_trust_prompt(lang, "debrief")])
 
 
 async def _handle_normal_message(
@@ -365,7 +424,7 @@ async def _handle_normal_message(
             client, phone_number, "normal", user_turn_count=new_turn_count
         )
         end = not settings.CONTINUE_AFTER_DEBRIEF
-        firebase.mark_debriefed(client, phone_number, end_conversation=end)
+        firebase.mark_debriefed(client, phone_number, end_conversation=end, reason="limit")
         return BotResponse(
             text_messages=[
                 ai_response,

@@ -63,12 +63,12 @@ def load_env_files() -> list[Path]:
 
 _LOADED = load_env_files()
 os.environ.setdefault("FIRESTORE_COLLECTION", "web_conversations")   # never the WhatsApp collection by default
-# Study parameters for the web deployment (override in webchat/.env):
-os.environ.setdefault("TRUST_RATING_MIN", "0")          # slider scale
-os.environ.setdefault("TRUST_RATING_MAX", "100")
-os.environ.setdefault("TRUST_CHECK_INTERVAL", "6")      # rating after every 6 user turns
-os.environ.setdefault("DEBRIEF_AFTER_TURNS", "6")       # debrief after turn 6 (control: 12), then keep talking
-os.environ.setdefault("CONTINUE_AFTER_DEBRIEF", "true")
+# Study parameters for the web deployment, phase 2 (override in webchat/.env):
+os.environ.setdefault("TRUST_RATING_MIN", "1")          # seven labelled buttons
+os.environ.setdefault("TRUST_RATING_MAX", "7")
+os.environ.setdefault("TRUST_CHECK_INTERVAL", "6")      # the two questions after every 6 user messages
+os.environ.setdefault("DEBRIEF_AFTER_TURNS", "24")      # after the rating at message 24: debrief, chat closes
+os.environ.setdefault("CONTINUE_AFTER_DEBRIEF", "false")
 sys.path.insert(0, str(PROJECT_ROOT))
 
 DEMO = "--demo" in sys.argv or os.getenv("WEBCHAT_DEMO", "").lower() in ("1", "true")
@@ -85,6 +85,10 @@ from integrations import openai_client  # noqa: E402
 PORT = int(os.getenv("WEBCHAT_PORT", "8100"))
 HOST = os.getenv("WEBCHAT_HOST", "127.0.0.1")
 IP_SALT = os.getenv("WEBCHAT_IP_SALT", "")
+# Minutes without a participant message after which the page shows the debrief
+# and closes the chat (the timer runs in the browser, so only an open page ends).
+INACTIVITY_MINUTES = float(os.getenv("WEBCHAT_INACTIVITY_MINUTES", "15"))
+MAX_RATING_EVENTS = 200   # button taps stored per rating
 def _git_sha() -> str:
     if os.getenv("GIT_COMMIT_SHA"):
         return os.environ["GIT_COMMIT_SHA"]
@@ -131,18 +135,24 @@ DEV_COMMANDS = ("/info", "/reset", "/lang en", "/lang pt")
 
 # Texts used by the page. Everything the participant reads is Portuguese.
 UI_TEXT = {
-    "title": "Pesquisa sobre as urnas eletrônicas",
+    "title": "Pesquisa acadêmica",            # must not name the topic
     "subtitle": "Universidade do Texas em Austin",
     "placeholder": "Digite sua mensagem",
     "send": "Enviar",
-    "rate_button": "Avaliar agora",
-    "rate_title": "O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?",
-    "rate_low": "Não confio nem um pouco",
-    "rate_high": "Confio totalmente",
-    "rate_unit": "%",
-    "rate_hint": "Mova a barra para registrar sua resposta",
-    "rate_confirm": "Avaliar agora",
-    "rate_pending": "Por favor, responda à avaliação acima antes de continuar.",
+    # rating panel (two questions, seven labelled buttons; see trust_service.RATING_*)
+    "rate_progress": "Pergunta {n} de {total}",
+    "rate_choose": "Escolha uma opção",
+    "rate_confirm": "Confirmar",
+    "rate_answers": "Suas respostas",
+    "rate_pending": "Por favor, responda às perguntas antes de continuar.",
+    # ending the conversation
+    "end_button": "Encerrar conversa",
+    "end_confirm": "Deseja encerrar a conversa agora?",
+    "end_yes": "Sim, encerrar",
+    "end_no": "Continuar conversando",
+    "exit_answer": "Responder",
+    "exit_skip": "Pular e encerrar",
+    "inactivity": "A conversa foi encerrada por inatividade.",
     "screening_pending": "Por favor, responda à pergunta acima antes de continuar.",
     "screened_out": "Esta sessão foi encerrada.",
     "typing": "digitando…",
@@ -188,7 +198,19 @@ class MessageIn(BaseModel):
 
 
 class RatingIn(BaseModel):
-    score: int = Field(ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
+    """Answers to the two trust questions, plus the taps that led to them."""
+    system: int = Field(ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
+    urnas: int = Field(ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=MAX_RATING_EVENTS)
+
+
+class EndIn(BaseModel):
+    """Encerrar conversa / inactivity. choice: "rated" (exit answers follow),
+    "skipped", "after_rating" (pressed right after a regular rating) or "inactivity"."""
+    choice: str = Field(pattern=r"^(rated|skipped|after_rating|inactivity)$")
+    system: int | None = Field(default=None, ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
+    urnas: int | None = Field(default=None, ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=MAX_RATING_EVENTS)
 
 
 # ----------------------------------------------------------------------------
@@ -268,12 +290,16 @@ def contacts_for(meta: SessionStart | None, sid: str) -> list:
 # response shaping
 # ----------------------------------------------------------------------------
 def web_text(lang: str, key: str) -> str:
-    """Shared study texts, with WhatsApp-specific wording adapted to the slider."""
-    t = trust_service.get_trust_prompt(lang, key)
-    return (t.replace("Use o botão 'Avaliar Agora' abaixo para atualizar sua pontuação.", "Mova o controle abaixo para atualizar sua pontuação.")
-             .replace("Use the 'Rate Now' button below to update your score.", "Move the slider below to update your score.")
-             .replace("clique no botão abaixo para responder uma pergunta rápida.", "use o controle abaixo para responder uma pergunta rápida.")
-             .replace("please tap the button below to answer one quick question.", "please use the slider below to answer one quick question."))
+    """Shared study texts (same source as the WhatsApp bot)."""
+    return trust_service.get_trust_prompt(lang, key)
+
+
+def rating_payload(kind: str, lang: str) -> dict:
+    """What the page needs to open the rating panel: the lead-in bubble, the two
+    questions and the seven options. kind: "baseline" | "check_in" | "exit"."""
+    lead_in = {"baseline": "baseline", "check_in": "check_in", "exit": "exit_rating"}[kind]
+    return {"kind": kind, "prompt": web_text(lang, lead_in),
+            "questions": trust_service.rating_questions(lang), "options": trust_service.rating_options(lang)}
 
 
 def screening_payload(key: str, lang: str) -> dict:
@@ -297,17 +323,21 @@ def state_of(sid: str) -> dict:
         if q:
             pending_screening = screening_payload(q["key"], lang)
     elif phase == "awaiting_initial_rating" and d.get("intro_sent"):
-        pending_rating = {"kind": "baseline", "prompt": web_text(lang, "baseline")}
+        pending_rating = rating_payload("baseline", lang)
     elif phase == "awaiting_check_in_rating":
-        pending_rating = {"kind": "check_in", "prompt": web_text(lang, "check_in")}
+        pending_rating = rating_payload("check_in", lang)
     screened_out = phase == "screened_out"
+    ratings = d.get("feeling_array", [])
     return {"session_id": sid, "phase": phase, "ended": phase == "ended", "history": history, "language": lang,
             "pending_rating": pending_rating, "pending_screening": pending_screening,
-            "screened_out": screened_out,
+            "screened_out": screened_out, "screened_out_reason": d.get("screened_out_reason"),
+            "ended_reason": d.get("ended_reason"),
+            # the page skips the optional exit questions when the button is pressed right after a rating
+            "last_rating_turn": max((r.get("message_index", 0) for r in ratings), default=None),
             "closing": trust_service.get_trust_prompt(lang, "screening_closing") if screened_out else None,
             "intro_text": trust_service.get_trust_prompt(lang, "intro"),
             "user_turn_count": d.get("user_turn_count", 0),
-            "ratings": [r.get("score") for r in d.get("feeling_array", [])],
+            "ratings": [{"system": r.get("score_system"), "urnas": r.get("score")} for r in ratings],
             # so a reload of a finished conversation still shows the debrief (it is not part of history)
             "debrief": trust_service.get_trust_prompt(lang, "debrief") if phase == "ended" else None,
             "debriefed": bool(d.get("debriefed_at")),
@@ -330,12 +360,12 @@ def shape(sid: str, bot) -> dict:
     """Turn a BotResponse into what the page renders."""
     out = {"messages": list(bot.text_messages), "rating": None, "screening": None}
     if bot.send_trust_flow:
-        out["rating"] = {"kind": bot.trust_flow_prompt_key, "prompt": web_text(bot.trust_flow_language, bot.trust_flow_prompt_key)}
+        out["rating"] = rating_payload(bot.trust_flow_prompt_key, bot.trust_flow_language)
     if bot.send_screening:
         out["screening"] = screening_payload(bot.send_screening, bot.trust_flow_language)
     st = state_of(sid)
     out.update({"phase": st["phase"], "ended": st["ended"], "screened_out": st["screened_out"], "user_turn_count": st["user_turn_count"],
-                "completed": st["completed"]})
+                "completed": st["completed"], "last_rating_turn": st["last_rating_turn"]})
     return out
 
 
@@ -380,7 +410,9 @@ def health():
 
 @app.get("/api/text")
 def ui_text():
-    return {**UI_TEXT, "rating_min": settings.TRUST_RATING_MIN, "rating_max": settings.TRUST_RATING_MAX}
+    return {**UI_TEXT, "rating_min": settings.TRUST_RATING_MIN, "rating_max": settings.TRUST_RATING_MAX,
+            "rating_questions": trust_service.rating_questions("PT"), "rating_options": trust_service.rating_options("PT"),
+            "exit_prompt": web_text("PT", "exit_rating"), "inactivity_minutes": INACTIVITY_MINUTES}
 
 
 @app.post("/api/session")
@@ -471,10 +503,27 @@ async def post_rating(sid: str, body: RatingIn, request: Request):
         return {"messages": [], "rating": None, "screening": None, "phase": "ended", "ended": True, "screened_out": False, "user_turn_count": st["user_turn_count"]}
     if not st["pending_rating"]:
         raise HTTPException(409, "no rating is pending")
-    reply_id = f"rating_{body.score}"
+    reply_id = f"rating_{body.system}_{body.urnas}"
     async with lock_for(sid):
         bot = await conversation_service.handle_incoming_message(
-            CLIENT, sid, reply_id, "interactive", raw_message=build_raw_message(sid, reply_id, "interactive", None, request), contacts=[], allow_dev_commands=True)
+            CLIENT, sid, reply_id, "interactive", raw_message=build_raw_message(sid, reply_id, "interactive", None, request), contacts=[],
+            allow_dev_commands=True, rating_events=body.events)
+    return shape(sid, bot)
+
+
+@app.post("/api/session/{sid}/end")
+async def post_end(sid: str, body: EndIn, request: Request):
+    """Encerrar conversa (with or without the optional exit questions) or the
+    inactivity timer: debrief, then the conversation is closed for good."""
+    st = state_of(sid)
+    rating = None
+    if body.choice == "rated":
+        if body.system is None or body.urnas is None:
+            raise HTTPException(422, "choice 'rated' needs both answers")
+        rating = {"system": body.system, "urnas": body.urnas}
+    async with lock_for(sid):
+        bot = await conversation_service.end_conversation(CLIENT, sid, body.choice, rating=rating, rating_events=body.events)
+    log.info("session %s ended: %s (turns=%s)", sid, body.choice, st["user_turn_count"])
     return shape(sid, bot)
 
 

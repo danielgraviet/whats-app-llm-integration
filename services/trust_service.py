@@ -17,22 +17,11 @@ Before we begin, I need you to answer a few quick questions.""",
         "screening_q2": """2. Are you eligible to vote in Brazilian elections?""",
         "screening_invalid_q1": """Please answer "Yes" or "No".""",
         "screening_invalid_q2": """Please answer "Yes", "No" or "I don't know".""",
-        "screening_closing": """Thank you for your interest! To take part in this study you must be 18 or older and eligible to vote in Brazilian elections.""",
-        "baseline": """How much do you trust that Brazilian electronic voting machines record and count every vote correctly?
-
-Use the bar below to indicate your level of trust from 0% to 100%, where 0% means you do not trust them at all and 100% means you trust them completely.
-
-0% = I do not trust them at all
-100% = I trust them completely""",
-        "invalid": """Please use the 'Rate Now' button below to submit your rating — we're not able to record ratings sent as text messages.""",
-        "check_in": """Before continuing the conversation, please answer one more quick question by tapping the button below.
-
-How much do you trust that Brazilian electronic voting machines record and count every vote correctly?
-
-Use the bar below to indicate your level of trust from 0% to 100%, where 0% means you do not trust them at all and 100% means you trust them completely.
-
-0% = I do not trust them at all
-100% = I trust them completely""",
+        "screening_closing": """Thank you for your answer! At this stage the study is talking with a specific profile of participants, so your participation ends here. We very much appreciate your time.""",
+        "baseline": """Before we begin, please answer two quick questions.""",
+        "invalid": """Please use the buttons above to answer the two questions.""",
+        "check_in": """Before we continue, please answer two more quick questions.""",
+        "exit_rating": """Before you go, could you answer two quick questions? It's optional.""",
         "rating_received": """Thank you! To get us started, I'd love to hear your thoughts: what comes to mind when you think about Brazil's electronic voting machines?""",
         "debrief": """Thank you for participating in this research.
 
@@ -57,8 +46,8 @@ Electoral Justice: https://www.justicaeleitoral.jus.br/urna-eletronica/
 
 Thank you very much for your contribution to this research. If you would like, you are welcome to keep the conversation going for as long as you wish; just keep writing. To finish, simply close this page.
 If you have any questions about the study, please contact us by email: k.vervuurt@utexas.edu""",
-        "rating_received_control": """Thank you! Let's talk about Brazilian elections. But first, to start with something lighter, I'd like to know: what do you think of the "cachorro caramelo", the caramel-colored dog so well known in Brazil?""",
-        "control_transition": """Thank you! Now the topic changes: let's talk about the elections. To start, what comes to mind when you think about Brazil's electronic voting machines?""",
+        "rating_received_control": """Before we talk about the Brazilian elections, I'm going to ask a few quick questions about a lighter subject, and then we'll get to the elections. To start: what do you think of the cachorro caramelo, so well known in Brazil?""",
+        "control_transition": """Thank you! Now let's change the subject and talk about the electronic voting machines. To start, what comes to mind when you think about Brazil's electronic voting machines?""",
     },
     "PT": {
         "intro": """Olá!
@@ -76,22 +65,11 @@ Antes de começar, preciso que você responda algumas perguntas rápidas.""",
         "screening_q2": """2. Você está apto(a) a votar nas eleições brasileiras?""",
         "screening_invalid_q1": """Por favor, responda "Sim" ou "Não".""",
         "screening_invalid_q2": """Por favor, responda "Sim", "Não" ou "Não sei".""",
-        "screening_closing": """Obrigado pelo interesse! Para participar desta pesquisa, é necessário ter 18 anos ou mais e estar apto(a) a votar nas eleições brasileiras.""",
-        "baseline": """O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?
-
-Use a barra abaixo para indicar seu grau de confiança de 0% a 100%, onde 0% significa que você não confia nem um pouco e 100% indica que confia totalmente.
-
-0% = Não confio nem um pouco
-100% = Confio totalmente""",
-        "invalid": """Por favor, use o botão 'Avaliar Agora' abaixo para enviar sua avaliação — não conseguimos registrar notas enviadas por mensagens de texto.""",
-        "check_in": """Antes de continuar a conversa, responda mais uma pergunta rápida clicando no botão abaixo.
-
-O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?
-
-Use a barra abaixo para indicar seu grau de confiança de 0% a 100%, onde 0% significa que você não confia nem um pouco e 100% indica que confia totalmente.
-
-0% = Não confio nem um pouco
-100% = Confio totalmente""",
+        "screening_closing": """Obrigado pela sua resposta! Nesta etapa, a pesquisa está conversando com um perfil específico de participantes, e por isso sua participação termina aqui. Agradecemos muito o seu tempo.""",
+        "baseline": """Antes de começar, responda duas perguntas rápidas.""",
+        "invalid": """Por favor, use os botões acima para responder às duas perguntas.""",
+        "check_in": """Antes de continuar, responda mais duas perguntas rápidas.""",
+        "exit_rating": """Antes de sair, você pode responder duas perguntas rápidas? É opcional.""",
         "rating_received": """Obrigado! Para começarmos, eu adoraria ouvir sua opinião: o que vem à sua mente quando você pensa nas urnas eletrônicas do Brasil?""",
         "debrief": """Obrigado por participar desta pesquisa.
 
@@ -116,8 +94,8 @@ Justiça Eleitoral: https://www.justicaeleitoral.jus.br/urna-eletronica/
 
 Muito obrigado pela sua contribuição para esta pesquisa. Se quiser, você pode continuar a conversa pelo tempo que desejar — é só continuar escrevendo. Para encerrar, basta fechar esta página.
 Se tiver dúvidas sobre a pesquisa, favor entrar em contato pelo email: k.vervuurt@utexas.edu""",
-        "rating_received_control": """Obrigado! Vamos conversar sobre as eleições brasileiras. Antes, para começar com um assunto mais leve, queria saber: o que você acha do cachorro caramelo, tão conhecido aqui no Brasil?""",
-        "control_transition": """Obrigado! Agora vamos mudar de assunto e falar sobre as eleições. Para começar, o que vem à sua mente quando você pensa nas urnas eletrônicas do Brasil?""",
+        "rating_received_control": """Antes de conversar sobre as eleições brasileiras, vou fazer algumas perguntas rápidas sobre um assunto mais leve e depois a gente fala das eleições. Para começar: o que você acha do cachorro caramelo, tão conhecido no Brasil?""",
+        "control_transition": """Obrigado! Agora vamos mudar de assunto e conversar sobre as urnas eletrônicas. Para começar, o que vem à sua mente quando você pensa nas urnas eletrônicas do Brasil?""",
     },
 }
 
@@ -172,37 +150,83 @@ def screening_options(question: dict, language: str) -> list[dict]:
             for opt, labels in question["options"]]
 
 
+# The two trust questions, asked together at the baseline, after the 6th, 12th,
+# 18th and 24th participant messages, and optionally when the participant ends
+# early. Question 2 ("urnas") is the primary measure and drives the high-trust
+# filter; question 1 ("system") is trust in the electoral system as a whole.
+RATING_QUESTIONS = [
+    {"key": "system", "text": {"PT": "O quanto você confia no sistema eleitoral brasileiro como um todo?",
+                               "EN": "How much do you trust the Brazilian electoral system as a whole?"}},
+    {"key": "urnas", "text": {"PT": "O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?",
+                              "EN": "How much do you trust that Brazilian electronic voting machines record and count every vote correctly?"}},
+]
+# Seven labelled buttons, shown with the number, in this order, for both questions.
+RATING_OPTIONS = [
+    (1, {"PT": "Não confio nada", "EN": "Do not trust at all"}),
+    (2, {"PT": "Confio muito pouco", "EN": "Trust very little"}),
+    (3, {"PT": "Confio pouco", "EN": "Trust a little"}),
+    (4, {"PT": "Confio mais ou menos", "EN": "Trust somewhat"}),
+    (5, {"PT": "Confio muito", "EN": "Trust a lot"}),
+    (6, {"PT": "Confio quase totalmente", "EN": "Trust almost completely"}),
+    (7, {"PT": "Confio totalmente", "EN": "Trust completely"}),
+]
+# A baseline answer of this value to the voting-machine question ends the session
+# before any conversation (Step 4 of the phase-2 design).
+HIGH_TRUST_SCORE = 7
+
+
+def _lang(language: str) -> str:
+    return language.upper() if language.upper() in ("PT", "EN") else "PT"
+
+
+def rating_questions(language: str) -> list[dict]:
+    lang = _lang(language)
+    return [{"key": q["key"], "text": q["text"][lang]} for q in RATING_QUESTIONS]
+
+
+def rating_options(language: str) -> list[dict]:
+    lang = _lang(language)
+    return [{"value": v, "label": labels[lang]} for v, labels in RATING_OPTIONS]
+
+
+def rating_label(value: int, language: str) -> str:
+    lang = _lang(language)
+    return next((labels[lang] for v, labels in RATING_OPTIONS if v == value), str(value))
+
+
+def is_high_trust(urnas: int) -> bool:
+    return urnas >= HIGH_TRUST_SCORE
+
+
 def _in_range(value: int) -> bool:
     return settings.TRUST_RATING_MIN <= value <= settings.TRUST_RATING_MAX
 
 
-def parse_text_rating(text: str) -> int | None:
-    """Try to extract a valid rating (within the configured scale) from plain text like '7'."""
+def _pair(values: list[str]) -> dict | None:
+    """["4", "6"] -> {"system": 4, "urnas": 6}; a single number is the urnas
+    answer alone (legacy / text channel). None if anything is out of range."""
     try:
-        value = int(text.strip())
-        if _in_range(value):
-            return value
+        nums = [int(v) for v in values]
     except ValueError:
-        pass
-    return None
-
-
-def parse_interactive_rating(list_reply_id: str) -> int | None:
-    """Try to extract a valid 1-10 rating from user input.
-
-    Returns the integer score if valid, None otherwise.
-    Only accepts bare integers (e.g. "7"), not "seven" or "7/10".
-    """
-    if not list_reply_id.startswith("rating_"):
-        # add potential logging here.
         return None
-    try:
-        value = int(list_reply_id.split("_")[1])
-        if _in_range(value):
-            return value
-    except (ValueError, IndexError):
-        pass
+    if len(nums) == 1:
+        return {"system": None, "urnas": nums[0]} if _in_range(nums[0]) else None
+    if len(nums) == 2 and all(_in_range(n) for n in nums):
+        return {"system": nums[0], "urnas": nums[1]}
     return None
+
+
+def parse_text_rating(text: str) -> dict | None:
+    """Plain text like "4 6", "4,6" or "6" -> {"system": .., "urnas": ..}."""
+    return _pair(text.replace(",", " ").split())
+
+
+def parse_interactive_rating(list_reply_id: str) -> dict | None:
+    """Button reply id "rating_<system>_<urnas>" (or legacy "rating_<urnas>")
+    -> {"system": .., "urnas": ..}; None if malformed or out of range."""
+    if not list_reply_id.startswith("rating_"):
+        return None
+    return _pair(list_reply_id[len("rating_"):].split("_"))
 
 
 def should_trigger_check_in(user_turn_count: int) -> bool:
@@ -211,13 +235,10 @@ def should_trigger_check_in(user_turn_count: int) -> bool:
     return user_turn_count > 0 and user_turn_count % interval == 0
 
 
-def debrief_turn(variant_base: str | None) -> int:
-    """Turn after which the debrief is shown. The control condition talks about
-    pets first, so its debrief comes one check-in interval later, after it has
-    had the same number of election turns as the other conditions."""
-    from services import prompt_service  # local import: avoids a cycle
-    extra = settings.TRUST_CHECK_INTERVAL if variant_base == prompt_service.CONTROL_VARIANT else 0
-    return settings.DEBRIEF_AFTER_TURNS + extra
+def debrief_turn(variant_base: str | None = None) -> int:
+    """Turn after whose rating the debrief is shown and the conversation ends:
+    DEBRIEF_AFTER_TURNS (24) in every arm, control included."""
+    return settings.DEBRIEF_AFTER_TURNS
 
 
 def should_debrief(user_turn_count: int, variant_base: str | None = None, already_debriefed: bool = False) -> bool:
@@ -231,7 +252,8 @@ def get_trust_prompt(language: str, prompt_key: str) -> str:
     Args:
         language: "EN" or "PT"
         prompt_key: "intro", "screening_q1", "screening_q2", "screening_closing",
-            "baseline", "invalid", "check_in", "rating_received", "debrief",
+            "baseline", "invalid", "check_in", "exit_rating", "rating_received",
+            "rating_received_control", "control_transition", "debrief",
             "conversation_ended", ...
     """
     lang = language.upper()

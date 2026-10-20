@@ -12,11 +12,11 @@ sys.path.insert(0, str(ROOT))
 
 # Web-study defaults (same as webchat/app.py) and no real clients.
 os.environ.setdefault("OPENAI_API_KEY", "test")
-os.environ.setdefault("TRUST_RATING_MIN", "0")
-os.environ.setdefault("TRUST_RATING_MAX", "100")
+os.environ.setdefault("TRUST_RATING_MIN", "1")
+os.environ.setdefault("TRUST_RATING_MAX", "7")
 os.environ.setdefault("TRUST_CHECK_INTERVAL", "6")
-os.environ.setdefault("DEBRIEF_AFTER_TURNS", "6")
-os.environ.setdefault("CONTINUE_AFTER_DEBRIEF", "true")
+os.environ.setdefault("DEBRIEF_AFTER_TURNS", "24")
+os.environ.setdefault("CONTINUE_AFTER_DEBRIEF", "false")
 os.environ.setdefault("FIRESTORE_COLLECTION", "test_conversations")
 
 from webchat.fake_firestore import install_transactional_shim  # noqa: E402

@@ -16,38 +16,40 @@ Facebook ad ─► https://pccgo.cs.byu.edu/pesquisa/?utm_campaign=…&utm_conte
                       └─► Firestore collection  web_conversations   ← separate from "conversations"
 ```
 
-## What the participant sees
+## What the participant sees (phase 2, 17 Oct 2026 design)
 
-Portuguese only, phone-first layout in the WhatsApp visual style:
+Portuguese only, phone-first layout in the WhatsApp visual style. The header
+says only "Pesquisa acadêmica": it must not name the topic.
 
-1. Intro text with the study sponsor, ethics approval and consent language ("Antes de começar, preciso que você responda algumas perguntas rápidas.").
-2. **Eligibility screening**, one question at a time with buttons: "Você tem 18 anos ou mais?" (Sim / Não), then "Você está apto(a) a votar nas eleições brasileiras?" (Sim / Não / Não sei). Only Sim + Sim proceeds. Any other answer shows the closing message ("Obrigado pelo interesse! Para participar desta pesquisa, é necessário ter 18 anos ou mais e estar apto(a) a votar…") and ends the session: no baseline question, no conversation. Text typed while a question is open re-shows the buttons. Each answer is stored the moment it is given, so a participant who answers the first question and leaves is still recorded. `SCREENING_ENABLED=false` skips this step.
-3. The **baseline question** with a **0% to 100% slider**: "O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?", labelled "0% = Não confio nem um pouco" and "100% = Confio totalmente". The slider starts in the middle, greyed out; nothing is recorded until the participant moves it and taps "Avaliar agora". Ordinary text is refused with a note until the rating is given.
-4. The LLM conversation under one of the five randomly assigned prompt conditions (prompts v5, 4 Oct 2026).
-5. After every `TRUST_CHECK_INTERVAL` (6) user messages, the attitude-change question ("Antes de continuar a conversa, responda mais uma pergunta rápida…") with the same slider. The second rating is the **post** measurement; the first is **pre**. Both are stored as plain fields (`rating_pre`, `rating_post`) on the document; every rating also stays in `feeling_array`.
-6. After the rating at turn `DEBRIEF_AFTER_TURNS` (6), the debriefing text with the TSE links, worded to say the participant may keep talking. The conversation then simply continues, with the slider again every 6 turns (12, 18, ...). Nothing ends it except closing the page.
+1. Intro text with the study sponsor, ethics approval and consent language (unchanged).
+2. **Eligibility screening**, one question at a time with buttons: 18 or older (Sim / Não), eligible to vote (Sim / Não / Não sei). Only Sim + Sim proceeds; anything else shows the closing message ("Obrigado pela sua resposta! Nesta etapa, a pesquisa está conversando com um perfil específico de participantes…") and ends the session. Each answer is stored the moment it is given. `SCREENING_ENABLED=false` skips this step.
+3. **Baseline trust questions** in a fixed panel over the chat, after the lead-in "Antes de começar, responda duas perguntas rápidas.": question 1 "O quanto você confia no sistema eleitoral brasileiro como um todo?" and question 2 "O quanto você confia que as urnas eletrônicas brasileiras registram e contam corretamente cada voto?", each answered with seven labelled buttons (1 Não confio nada … 7 Confio totalmente). A tap only highlights; "Confirmar: <label>" records the answer. Nothing is pre-selected, the text box is off until both are confirmed, and every tap is logged with a timestamp. The answers are echoed into the chat as words.
+4. **High-trust filter**: a 7 on question 2 ends the session with the same closing message as the screening. The answers are kept (`screened_out_reason: high_trust`); no arm is drawn and no conversation starts.
+5. **Random assignment**, only now, to one of three arms with equal probability: A control (cachorro caramelo for six messages, then question-only about the urnas), B motivational interviewing (facts only when directly asked), C empathetic refutational interviewing (facts with permission). Prompts v6 in `prompt/pt/*_v6.txt`, English text as reviewed by the team.
+6. The conversation. In arm A the fixed opener about the cachorro caramelo is sent by the code, and after the rating at message 6 the fixed transition to the urnas; the model then runs under `A2_control_elections_v6`.
+7. **Ratings during the conversation**: the same two questions and buttons after the participant's 6th, 12th, 18th and 24th messages, lead-in "Antes de continuar, responda mais duas perguntas rápidas.", in every arm. The rating after the 6th message is the **post** measurement (main outcome); the baseline is **pre**.
+8. **Ending.** A small "Encerrar conversa" button sits in the header from the moment the conversation starts. Pressing it asks for confirmation, then offers the optional exit questions ("Antes de sair, você pode responder duas perguntas rápidas? É opcional." with Responder / Pular e encerrar); the answers are saved as the **exit** rating with the message count at that moment, and the choice is logged. Pressed right after a regular rating, the button goes straight to the debrief. After the rating at message 24 the debrief is shown and the chat closes. With no participant message for `WEBCHAT_INACTIVITY_MINUTES` (15) while the page is open, the page shows the debrief and closes the chat by itself. The debrief appears only at the end; a participant who simply closes the page never sees it, as intended.
 
-**Control condition (`A_control_condition`)** is a two-stage conversation. After the pre rating the fixed opener is sent ("Vamos conversar sobre as eleições brasileiras. Antes, para começar com um assunto mais leve, queria saber: o que você acha do cachorro caramelo…"), and the assistant talks only about the cachorro caramelo (its own prompt, no election content) for 6 turns; the post rating follows; then the fixed transition ("Agora vamos mudar de assunto e falar sobre as eleições…") and a neutral, question-only conversation about the electronic voting machines under a second prompt (`A2_control_elections`). The researchers' prompt A describes both halves in one text with "for the first six turns"; it is split in two files because the code counts the turns (the model only sees the last five), which makes the switch exact. Its debrief comes after the rating at turn 12, so every condition sees the debrief after six election turns. Pre and post are therefore comparable across all five conditions.
-
-Every message and rating is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage).
+Every message, answer and tap is written to Firestore as it happens, so a participant who leaves mid-way still contributes a partial record. Reloading the page resumes the same session (id kept in the browser's localStorage).
 
 The WhatsApp developer commands work the same way here, typed as messages:
-`/info` shows the condition, phase, turn count, pre/post ratings and system prompt;
+`/info` shows the arm, phase, turn count, pre/post/exit ratings and system prompt;
 `/reset` deletes the session from Firestore and reloads the page as a brand
-new participant (new session id, fresh random condition); `/lang en` or
-`/lang pt` switches the prompt language. `?new=1` on the URL also starts a
-fresh session.
+new participant; `/lang en` or `/lang pt` switches the prompt language.
+`?new=1` on the URL also starts a fresh session.
 
 These are the web deployment's defaults, set in `webchat/app.py` and
-overridable in `webchat/.env`: `TRUST_RATING_MIN=0`, `TRUST_RATING_MAX=100`,
-`TRUST_CHECK_INTERVAL=6`, `DEBRIEF_AFTER_TURNS=6`, `CONTINUE_AFTER_DEBRIEF=true`.
-The WhatsApp app keeps its own defaults (1-10, debrief ends the conversation).
+overridable in `webchat/.env`: `TRUST_RATING_MIN=1`, `TRUST_RATING_MAX=7`,
+`TRUST_CHECK_INTERVAL=6`, `DEBRIEF_AFTER_TURNS=24`, `CONTINUE_AFTER_DEBRIEF=false`,
+`WEBCHAT_INACTIVITY_MINUTES=15`.
 
 ## What is recorded
 
 Same document shape as WhatsApp, in collection `web_conversations`, keyed by a random session id (`web_…`) instead of a phone number:
 
-- history, phase, variant, turn count, ratings, debriefed_at (identical fields), plus `rating_pre` and `rating_post`
+- history, phase, variant (`prompt_variant`, empty until the arm is drawn after the baseline filter, with `variant_assigned_at`), turn count, `debriefed_at`
+- ratings: `feeling_array` entries `{score, score_system, message_index, slot, timestamp, events}` where `score` is question 2 (urnas, the primary measure), `score_system` question 1, `slot` is `pre` / `post` / `exit` / null, and `events` the button taps (`q`, `value`, `selected|changed|confirmed`, `at`). The analysis fields `rating_pre`, `rating_post`, `rating_exit` (urnas) and `rating_pre_system`, `rating_post_system`, `rating_exit_system` are plain fields on the document
+- `screened_out_reason`: `eligibility` or `high_trust`; `ended_reason`: `limit`, `button` or `inactivity`; `exit`: `{choice: rated|skipped|after_rating, at, user_turns}` when the button was used
 - `screening`: `age_18` and `eligible_voter` (`sim` / `nao` / `nao_sei`) with a timestamp each, `passed`, `completed_at`; `screened_out_at` on failure. Phases `awaiting_screening` (opened the page, not done) and `screened_out` (failed) exist alongside the usual ones, so **every visitor has a document** from the moment the page opens, qualified or not
 - `page_loads`, `last_seen_at` and a `visits` list (one entry per page open/resume with that visit's page metadata)
 - `first_message_raw.referral`: built from the ad URL. `source_id` = `utm_content` (fall back `ad_id`, `utm_campaign`), `ctwa_clid` = `fbclid`, plus every `utm_*` / `fbclid` / `gclid` / `ad_id` / `adset_id` / `campaign_id` parameter under `params`
@@ -66,7 +68,7 @@ Portuguese by design):
 |---|---|---|---|
 | `PageView` | standard | every page load (the base code is in `<head>`) | none, by design |
 | `ConversaIniciada` | custom | the participant submits their **first text message** of the session (after screening and the pre rating; `/` developer commands do not count) | once per session |
-| `PesquisaConcluida` | custom | the **post rating** is stored (`rating_post`, the second slider, turn 6 in every condition), i.e. the session has become a research-usable pre/post pair | once per session |
+| `PesquisaConcluida` | custom | the **post rating** is stored (`rating_post`, the questions after message 6 in every arm), i.e. the session has become a research-usable pre/post pair | once per session |
 
 Both custom events carry one parameter, `criativo`, with the ad's
 `utm_content` (the four creatives: `skeptical_frame`, `open_question`,
@@ -100,7 +102,7 @@ custom events already fire after consent by construction.
 
 To verify in production: Meta Events Manager > Test events, or the Meta Pixel
 Helper browser extension, with a `?utm_content=...` URL; go through screening,
-the slider, one message (ConversaIniciada), six messages and the second slider
+the two questions, one message (ConversaIniciada), six messages and the questions again
 (PesquisaConcluida). `e2e/test_webchat_pixel_browser.py` does the same walk in
 headless Chrome against a demo server (needs `pip install playwright` and
 Chrome; skipped otherwise).

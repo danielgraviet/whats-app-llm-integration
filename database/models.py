@@ -5,11 +5,22 @@ import pydantic
 
 
 class TrustRating(pydantic.BaseModel):
-    score: int  # 10 is they completely trust the voting machines.
+    """One answer to the pair of trust questions (scale 1-7, see trust_service.RATING_OPTIONS).
+
+    score is the voting-machine question ("urnas", question 2), the primary
+    measure; score_system is question 1, trust in the electoral system as a
+    whole. slot is "pre" (baseline), "post" (after the 6th message), "exit"
+    (optional, when the participant ends early) or None (later check-ins).
+    events are the participant's taps on the buttons, each with a timestamp.
+    """
+    score: int
+    score_system: Optional[int] = None
     timestamp: datetime = pydantic.Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
     message_index: int
+    slot: Optional[str] = None
+    events: List[Dict[str, Any]] = []
 
 
 class Message(pydantic.BaseModel):
@@ -28,7 +39,10 @@ class Conversation(pydantic.BaseModel):
         default_factory=lambda: datetime.now(timezone.utc)
     )
     language: str = "PT"
-    prompt_variant: str = "PT_prompt_A_control_condition"
+    # Study arm. Empty until the participant passes the baseline high-trust
+    # filter, when one is drawn at random (prompt_service.assign_variant).
+    prompt_variant: str = ""
+    variant_assigned_at: Optional[datetime] = None
 
     # metrics for tracking feelings
     # phases: awaiting_screening -> awaiting_initial_rating -> normal <-> awaiting_check_in_rating -> ended
@@ -41,15 +55,30 @@ class Conversation(pydantic.BaseModel):
     # "passed": bool, "completed_at": ts}
     screening: Dict[str, Any] = {}
     screened_out_at: Optional[datetime] = None
+    # "eligibility" (failed the screening) or "high_trust" (answered 7 to the
+    # voting-machine question at the baseline; the rating is still stored).
+    screened_out_reason: Optional[str] = None
+    # Why the conversation ended: "limit" (rating at the 24th message), "button"
+    # (Encerrar conversa; see `exit` for whether the optional exit rating was
+    # answered) or "inactivity" (15 minutes without a message, page still open).
+    ended_reason: Optional[str] = None
+    exit: Dict[str, Any] = {}
     # Engagement metadata (web): how many times the page was opened/resumed,
     # when it was last opened, and the per-visit page metadata.
     page_loads: int = 0
     last_seen_at: Optional[datetime] = None
     visits: List[Dict[str, Any]] = []
-    # The two ratings the primary analysis uses: before the conversation and
-    # after the first TRUST_CHECK_INTERVAL turns. All ratings stay in feeling_array.
+    # The ratings the primary analysis uses: before the conversation (pre), after
+    # the first TRUST_CHECK_INTERVAL turns (post) and, optionally, when the
+    # participant ends early (exit). *_system is question 1 (electoral system as a
+    # whole); the unsuffixed field is question 2 (voting machines). All ratings
+    # stay in feeling_array.
     rating_pre: Optional[int] = None
     rating_post: Optional[int] = None
+    rating_pre_system: Optional[int] = None
+    rating_post_system: Optional[int] = None
+    rating_exit: Optional[int] = None
+    rating_exit_system: Optional[int] = None
     feeling_array: List[TrustRating] = []
     user_turn_count: int = 0
     intro_sent: bool = False

@@ -124,22 +124,27 @@ def get_or_create_conversation(
 
 
 def save_trust_rating(
-    client, phone_number: str, score: int, message_index: int, slot: str | None = None
+    client, phone_number: str, rating: dict, message_index: int, slot: str | None = None,
+    events: list | None = None,
 ) -> bool:
-    """Appends a trust rating to the feeling_array in Firestore.
+    """Appends a pair of trust answers to feeling_array.
 
-    slot="pre" / "post" additionally stores the score in rating_pre / rating_post,
-    the two values the primary analysis compares.
+    rating = {"system": q1, "urnas": q2} (1-7 each; "system" may be None on a
+    legacy single-number reply). slot="pre" / "post" / "exit" additionally
+    stores the pair in rating_<slot> (urnas) and rating_<slot>_system, the
+    values the analysis compares. events are the participant's button taps.
     """
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
-        rating = models.TrustRating(score=score, message_index=message_index)
+        entry = models.TrustRating(score=rating["urnas"], score_system=rating.get("system"),
+                                   message_index=message_index, slot=slot, events=list(events or []))
         update = {
-            "feeling_array": firestore.ArrayUnion([rating.model_dump()]),
+            "feeling_array": firestore.ArrayUnion([entry.model_dump()]),
             "updated_at": _now(),
         }
-        if slot in ("pre", "post"):
-            update[f"rating_{slot}"] = score
+        if slot in ("pre", "post", "exit"):
+            update[f"rating_{slot}"] = rating["urnas"]
+            update[f"rating_{slot}_system"] = rating.get("system")
         doc_ref.set(update, merge=True)
         return True
     except Exception:
@@ -174,15 +179,17 @@ def update_conversation_phase(
         return False
 
 
-def mark_debriefed(client, phone_number: str, end_conversation: bool = True) -> bool:
-    """Stamps debriefed_at. With end_conversation (WhatsApp default) the phase
-    becomes the terminal 'ended'; otherwise the conversation stays 'normal' and
-    the participant may keep talking."""
+def mark_debriefed(client, phone_number: str, end_conversation: bool = True, reason: str | None = None) -> bool:
+    """Stamps debriefed_at. With end_conversation the phase becomes the terminal
+    'ended' and ended_reason records why ("limit", "button", "inactivity");
+    otherwise the conversation stays 'normal' and the participant may keep talking."""
     try:
         doc_ref = client.collection(COLLECTION).document(phone_number)
         now = _now()
         update = {"debriefed_at": now, "updated_at": now,
                   "conversation_phase": "ended" if end_conversation else "normal"}
+        if end_conversation and reason:
+            update["ended_reason"] = reason
         doc_ref.update(update)
         return True
     except Exception:
@@ -317,6 +324,8 @@ def finish_screening(client, phone_number: str, conversation: models.Conversatio
                   "conversation_phase": "awaiting_initial_rating" if passed else "screened_out"}
         if not passed:
             update["screened_out_at"] = now
+            update["screened_out_reason"] = "eligibility"
+            conversation.screened_out_reason = "eligibility"
         client.collection(COLLECTION).document(phone_number).update(update)
         conversation.screening["passed"] = passed
         conversation.screening["completed_at"] = now
@@ -326,6 +335,51 @@ def finish_screening(client, phone_number: str, conversation: models.Conversatio
         return True
     except Exception:
         logger.exception("Error finishing screening for phone_number=%s", phone_number)
+        return False
+
+
+def screen_out(client, phone_number: str, conversation: models.Conversation, reason: str) -> bool:
+    """Ends the session before any conversation, e.g. reason="high_trust" when the
+    baseline answer to the voting-machine question is the maximum. The document
+    and everything stored so far (metadata, screening, the rating) are kept."""
+    try:
+        now = _now()
+        client.collection(COLLECTION).document(phone_number).update(
+            {"conversation_phase": "screened_out", "screened_out_at": now, "screened_out_reason": reason, "updated_at": now})
+        conversation.conversation_phase = "screened_out"
+        conversation.screened_out_at = now
+        conversation.screened_out_reason = reason
+        return True
+    except Exception:
+        logger.exception("Error screening out phone_number=%s", phone_number)
+        return False
+
+
+def assign_variant(client, phone_number: str, conversation: models.Conversation, prompt_variant: str) -> bool:
+    """Stores the study arm drawn after the baseline filter."""
+    try:
+        now = _now()
+        client.collection(COLLECTION).document(phone_number).update(
+            {"prompt_variant": prompt_variant, "variant_assigned_at": now, "updated_at": now})
+        conversation.prompt_variant = prompt_variant
+        conversation.variant_assigned_at = now
+        return True
+    except Exception:
+        logger.exception("Error assigning variant for phone_number=%s", phone_number)
+        return False
+
+
+def record_exit(client, phone_number: str, choice: str, user_turns: int) -> bool:
+    """How the participant left via the Encerrar conversa button: choice is
+    "rated" (answered the optional exit questions), "skipped" (Pular e encerrar)
+    or "after_rating" (pressed right after a regular rating, no exit questions)."""
+    try:
+        now = _now()
+        client.collection(COLLECTION).document(phone_number).set(
+            {"exit": {"choice": choice, "at": now, "user_turns": user_turns}, "updated_at": now}, merge=True)
+        return True
+    except Exception:
+        logger.exception("Error recording exit for phone_number=%s", phone_number)
         return False
 
 

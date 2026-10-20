@@ -3,21 +3,28 @@ from pathlib import Path
 
 from config import settings
 
+# Phase 2 arms (prompts v6, 17 Oct 2026), drawn with equal probability once the
+# participant has passed the baseline high-trust filter. Earlier arms
+# (B_motivational_learning, C_perspective, D_christmas_dinner, E_critical_thinking)
+# are retired; their files stay so old conversations can still be read.
 VARIANTS = [
-    "A_control_condition",
-    "B_motivational_learning",
-    "C_perspective",
-    "D_christmas_dinner",
-    "E_critical_thinking",
+    "A_control_v6",
+    "B_motivational_v6",
+    "C_refutational_v6",
 ]
 
 LANGUAGES = ["EN", "PT"]
 
-# The control condition runs in two stages: a conversation about cats and dogs
-# (its own prompt, A_control_condition) and, after the second rating, a
-# conversation about elections in general (A2_control_elections).
-CONTROL_VARIANT = "A_control_condition"
-CONTROL_STAGE2_VARIANT = "A2_control_elections"
+# The control condition runs in two stages: six messages about the cachorro
+# caramelo (A_control_v6) and, after the rating at the sixth message, a
+# question-only conversation about the voting machines (A2_control_elections_v6).
+# One prompt text in the study document, two files here, because the code
+# counts the turns and the model only sees the last few.
+CONTROL_VARIANT = "A_control_v6"
+CONTROL_STAGE2_VARIANT = "A2_control_elections_v6"
+
+# prompt_variant of a document whose arm has not been drawn yet.
+UNASSIGNED = ""
 
 _cache: dict[str, str] = {}
 
@@ -56,6 +63,10 @@ def get_prompt(
         folder = language.lower()  # en or pt
         filename = f"{variant}.txt"
         path = Path(__file__).parent.parent / "prompt" / folder / filename
+        if not path.is_file():
+            # The v6 prompts are written in English and kept once, under pt/.
+            # An EN_ variant falls back to the same text.
+            path = Path(__file__).parent.parent / "prompt" / "pt" / filename.replace(f"{language.upper()}_prompt_", "PT_prompt_", 1)
         _cache[key] = path.read_text()
 
     template = _cache[key]
@@ -66,5 +77,5 @@ def get_prompt(
 
 
 def assign_variant() -> str:
-    """Randomly assign a variant for A/B testing."""
+    """Draws the study arm, equal probability. Called after the baseline filter."""
     return random.choice(VARIANTS)
