@@ -9,8 +9,8 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 -- phone_hash is a salted SHA-256 prefix; the raw number never enters this DB.
 CREATE TABLE IF NOT EXISTS wa_conversations (
     phone_hash           TEXT PRIMARY KEY,
-    variant              TEXT,            -- e.g. A_control_condition
-    prompt_variant       TEXT,            -- e.g. PT_prompt_A_control_condition
+    variant              TEXT,            -- e.g. A_control_v6 ('' until the arm is drawn)
+    prompt_variant       TEXT,            -- e.g. PT_prompt_A_control_v6
     language             TEXT,
     phase                TEXT,            -- awaiting_screening | screened_out | awaiting_initial_rating | normal | awaiting_check_in_rating | ended
     intro_sent           BOOLEAN,

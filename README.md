@@ -286,7 +286,7 @@ Use it to confirm a deploy has cut over.
     "history": [Message, ...],
     "updated_at": "2024-01-01T12:00:00Z",
     "language": "EN",
-    "prompt_variant": "EN_prompt_A_control_condition",
+    "prompt_variant": "PT_prompt_A_control_v6",
     "conversation_phase": "normal",
     "debriefed_at": null,
     "feeling_array": [TrustRating, ...],
