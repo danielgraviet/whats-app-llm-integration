@@ -43,7 +43,7 @@ from typing import Any
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 WEBCHAT_DIR = Path(__file__).resolve().parent
@@ -145,6 +145,7 @@ UI_TEXT = {
     "rate_confirm": "Confirmar",
     "rate_answers": "Suas respostas",
     "rate_pending": "Por favor, responda às perguntas antes de continuar.",
+    "rate_reopen": "Responder às perguntas ({n} de {total})",   # bar shown while the sheet is collapsed
     # ending the conversation
     "end_button": "Encerrar conversa",
     "end_confirm": "Deseja encerrar a conversa agora?",
@@ -202,6 +203,21 @@ class RatingIn(BaseModel):
     system: int = Field(ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
     urnas: int = Field(ge=settings.TRUST_RATING_MIN, le=settings.TRUST_RATING_MAX)
     events: list[dict[str, Any]] = Field(default_factory=list, max_length=MAX_RATING_EVENTS)
+
+
+CLIENT_EVENT_NAMES = r"^(sheet_shown|back|shade|reopen|hidden|pagehide)$"
+
+
+class ClientEventIn(BaseModel):
+    """A UI event the page reports for diagnostics (sendBeacon, fire-and-forget):
+    sheet_shown, back (history Back collapsed the sheet), shade (tapped outside),
+    reopen (the bar brought the sheet back), hidden / pagehide (the page went
+    away while the questions were open)."""
+    name: str = Field(pattern=CLIENT_EVENT_NAMES)
+    at: str = Field(max_length=40)
+    kind: str | None = Field(default=None, max_length=20)      # baseline | check_in | exit
+    collapsed: bool | None = None
+    question: int | None = Field(default=None, ge=1, le=9)
 
 
 class EndIn(BaseModel):
@@ -509,6 +525,14 @@ async def post_rating(sid: str, body: RatingIn, request: Request):
             CLIENT, sid, reply_id, "interactive", raw_message=build_raw_message(sid, reply_id, "interactive", None, request), contacts=[],
             allow_dev_commands=True, rating_events=body.events)
     return shape(sid, bot)
+
+
+@app.post("/api/session/{sid}/event", status_code=204)
+async def post_client_event(sid: str, body: ClientEventIn):
+    """Diagnostic UI events from the page (see ClientEventIn). Stored on the
+    session document under client_events; never affects the conversation."""
+    firebase.record_client_event(CLIENT, sid, body.model_dump(exclude_none=True))
+    return Response(status_code=204)
 
 
 @app.post("/api/session/{sid}/end")

@@ -44,6 +44,9 @@
   #sheet { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; padding: 10px 16px; padding-bottom: max(14px, env(safe-area-inset-bottom)); box-shadow: 0 -4px 20px rgba(0,0,0,.25); z-index: 11; display: none; max-height: 92dvh; overflow-y: auto; }
   #sheet.show { display: block; animation: up .2s ease-out; }
   @keyframes up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  /* while the sheet is collapsed (Back gesture or a tap outside it) a bar over the text box brings it back */
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; display: none; padding: 14px 16px; padding-bottom: max(14px, env(safe-area-inset-bottom)); border: 0; background: var(--accent-dark); color: #fff; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 -4px 20px rgba(0,0,0,.25); }
+  #bar.show { display: block; }
   #sheet .grip { width: 44px; height: 4px; border-radius: 2px; background: #cfd4d8; margin: 0 auto 10px; }
   #sheet .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   #sheet .progress { font-size: 12.5px; font-weight: 600; letter-spacing: .03em; color: #54656f; text-transform: uppercase; }
@@ -82,11 +85,12 @@
 <footer id="footer"></footer>
 <div id="shade"></div>
 <div id="sheet" role="dialog" aria-modal="true"></div>
+<button id="bar" type="button"></button>
 
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
-  const chat = $("#chat"), form = $("#form"), input = $("#input"), send = $("#send"), endBtn = $("#end"), sheet = $("#sheet"), shade = $("#shade");
+  const chat = $("#chat"), form = $("#form"), input = $("#input"), send = $("#send"), endBtn = $("#end"), sheet = $("#sheet"), shade = $("#shade"), bar = $("#bar");
   const KEY = "pesquisa_session_id";
   let T = {}, sid = null, busy = false, ended = false, pendingRating = null, pendingScreening = null, phase = null;
   let userTurns = 0, lastRatingTurn = null, completed = false, creative = null;   // lastRatingTurn/completed: server state
@@ -109,6 +113,13 @@
   const setInput = (enabled) => { input.disabled = !enabled; send.disabled = !enabled; if (enabled) input.focus({ preventScroll: true }); };
   const fmt = (s, vars) => String(s || "").replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Diagnostic UI events (fire-and-forget; see app.py ClientEventIn). sendBeacon survives the page closing.
+  const beacon = (name, extra) => {
+    if (!sid) return;
+    const body = JSON.stringify({ name, at: new Date().toISOString(), kind: pendingRating ? pendingRating.kind : undefined, ...(extra || {}) });
+    try { if (navigator.sendBeacon && navigator.sendBeacon(`api/session/${sid}/event`, new Blob([body], { type: "application/json" }))) return; } catch {}
+    try { fetch(`api/session/${sid}/event`, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {}); } catch {}
+  };
   // The end button is visible from the moment the conversation starts (phase "normal"), in every arm.
   const showEnd = () => { endBtn.classList.toggle("show", phase === "normal" && !ended && !pendingRating); };
 
@@ -162,13 +173,34 @@
   // A fixed sheet over the chat. A tap only highlights; "Confirmar: <label>" records the answer
   // and moves to the next question. Nothing is pre-selected. Every tap is logged with a timestamp
   // and sent with the answers. The text box stays off until both answers are confirmed.
+  // The sheet is modal, but it must not be a trap: on Android the reflex for a bottom sheet is the
+  // system Back gesture, which in the Facebook/Instagram in-app browsers closes the whole page when
+  // there is no history. So opening the sheet pushes a history entry; Back (or a tap on the shade)
+  // only collapses the sheet to a bar, the chat becomes readable again, and the bar reopens it.
+  let sheetOpen = false, sheetPushed = false, sheetProgress = { n: 1, total: 2 };
+  const openSheet = () => {
+    sheetOpen = true; bar.classList.remove("show"); shade.classList.add("show"); sheet.classList.add("show");
+    if (!sheetPushed) { try { history.pushState({ sheet: 1 }, ""); sheetPushed = true; } catch {} }
+  };
+  const collapseSheet = (reason) => {
+    if (!sheetOpen) return;
+    sheetOpen = false; shade.classList.remove("show"); sheet.classList.remove("show");
+    bar.textContent = fmt(T.rate_reopen || "Responder às perguntas ({n} de {total})", sheetProgress); bar.classList.add("show");
+    beacon(reason, { question: sheetProgress.n });
+  };
+  window.addEventListener("popstate", () => { sheetPushed = false; if (sheetOpen && pendingRating) collapseSheet("back"); });
+  shade.addEventListener("click", () => collapseSheet("shade"));
+  bar.addEventListener("click", () => { if (!pendingRating) return; openSheet(); beacon("reopen", { question: sheetProgress.n }); });
+  document.addEventListener("visibilitychange", () => { if (pendingRating && document.visibilityState === "hidden") beacon("hidden", { collapsed: !sheetOpen, question: sheetProgress.n }); });
+  window.addEventListener("pagehide", () => { if (pendingRating) beacon("pagehide", { collapsed: !sheetOpen, question: sheetProgress.n }); });
+
   function showRating(r) {
     pendingRating = r; setInput(false); showEnd();
     const questions = r.questions || T.rating_questions || [], options = r.options || T.rating_options || [];
     const answers = {}, events = []; let i = 0;
     const log = (q, value, action) => events.push({ q, value, action, at: new Date().toISOString() });
     const render = () => {
-      const q = questions[i]; let chosen = null;
+      const q = questions[i]; let chosen = null; sheetProgress = { n: i + 1, total: questions.length };
       sheet.innerHTML = `<div class="grip"></div><div class="top"><span class="progress">${esc(fmt(T.rate_progress, { n: i + 1, total: questions.length }))}</span>
         <span class="dots">${questions.map((_, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</span></div>
         <div class="q">${esc(q.text)}</div><div class="opts"></div><button class="confirm" type="button" disabled>${esc(T.rate_choose)}</button>`;
@@ -194,9 +226,9 @@
       });
       sheet.scrollTop = 0;
     };
-    render(); shade.classList.add("show"); sheet.classList.add("show");
+    render(); openSheet(); beacon("sheet_shown");
   }
-  const closeSheet = () => { shade.classList.remove("show"); sheet.classList.remove("show"); sheet.innerHTML = ""; };
+  const closeSheet = () => { sheetOpen = false; shade.classList.remove("show"); sheet.classList.remove("show"); bar.classList.remove("show"); sheet.innerHTML = ""; };
 
   // ---------- ending: Encerrar conversa (two steps) or inactivity ----------
   async function endSession(choice, answers, events) {

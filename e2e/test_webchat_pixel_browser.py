@@ -304,3 +304,36 @@ def test_check_in_at_six_and_inactivity_timer(browser):
         assert errors == []; ctx.close()
     finally:
         proc.terminate(); proc.wait(timeout=10)
+
+
+def test_back_and_shade_collapse_the_sheet_instead_of_leaving(base_url, browser):
+    """Android: the Back gesture must not close the page while the questions are open.
+    Opening the sheet pushes a history entry; Back (or a tap on the shade) collapses the
+    sheet to a bar that reopens it; the events are reported to the server."""
+    errors = []; ctx, page = _page(browser, errors)
+    sent = []
+    page.on("request", lambda r: sent.append(r.post_data_json) if r.url.endswith("/event") else None)
+    page.goto(f"{base_url}/?new=1", wait_until="networkidle")
+    qualify(page); page.wait_for_selector("#sheet.show", timeout=10000)
+    depth = page.evaluate("history.length")
+    page.go_back(); page.wait_for_function("() => !document.querySelector('#sheet.show')", timeout=5000)
+    assert page.url.endswith("/?new=1"), "Back stayed on the page"
+    assert page.locator("#bar").is_visible() and page.locator("#bar").inner_text() == "Responder às perguntas (1 de 2)"
+    assert page.locator("#input").is_disabled() and not page.locator("#shade").is_visible()
+    page.locator("#bar").click(); page.wait_for_selector("#sheet.show", timeout=5000)
+    assert not page.locator("#bar").is_visible() and page.evaluate("history.length") == depth
+    # answer question 1, then tap outside: the bar names question 2 and brings it back
+    sheet = page.locator("#sheet.show")
+    sheet.locator(".opts button", has=page.locator(".n", has_text="3")).first.click(); sheet.locator("button.confirm").click()
+    page.mouse.click(10, 10); page.wait_for_function("() => !document.querySelector('#sheet.show')", timeout=5000)
+    assert page.locator("#bar").inner_text() == "Responder às perguntas (2 de 2)"
+    page.locator("#bar").click(); page.wait_for_selector("#sheet.show", timeout=5000)
+    sheet.locator(".opts button", has=page.locator(".n", has_text="4")).first.click(); sheet.locator("button.confirm").click()
+    page.wait_for_function("() => !document.querySelector('#sheet.show')", timeout=10000); wait_idle(page)
+    assert page.locator("#input").is_enabled() and not page.locator("#bar").is_visible()
+    names = [(e["name"], e.get("kind"), e.get("question")) for e in sent]
+    assert names == [("sheet_shown", "baseline", None), ("back", "baseline", 1), ("reopen", "baseline", 1), ("shade", "baseline", 2), ("reopen", "baseline", 2)]
+    # a later Back (the entry pushed for the sheet) is absorbed, the page stays
+    page.go_back(); page.wait_for_timeout(300)
+    assert page.url.endswith("/?new=1") and page.locator("#input").is_enabled()
+    assert errors == []; ctx.close()

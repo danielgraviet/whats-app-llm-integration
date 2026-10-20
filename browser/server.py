@@ -315,6 +315,9 @@ class Conv:
         d["first_message_raw"] = _jsonable(self.raw.get("first_message_raw") or {})
         d["referrals"] = _jsonable(self.raw.get("referrals") or [])
         d["pending_ai_response"] = self.raw.get("pending_ai_response") or ""
+        ev = _jsonable(self.raw.get("client_events") or [])
+        d["client_events"] = ev
+        d["n_back"] = sum(1 for e in ev if e.get("name") == "back")   # Android Back gesture while the questions were open
         if SHOW_PHONE:
             d["first_contacts_raw"] = _jsonable(self.raw.get("first_contacts_raw") or [])
         else:

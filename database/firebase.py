@@ -400,6 +400,26 @@ def record_visit(client, phone_number: str, visit: dict) -> bool:
         return False
 
 
+MAX_CLIENT_EVENTS = 60   # per conversation
+
+
+def record_client_event(client, phone_number: str, event: dict) -> bool:
+    """Append a small client-side UI event (web): the rating sheet shown, the
+    Android Back gesture or the shade collapsing it, the sheet reopened, the
+    page hidden while the questions were open. Diagnostic only; capped per
+    conversation so a misbehaving client cannot grow the document. Never raises."""
+    try:
+        ref = client.collection(COLLECTION).document(phone_number)
+        snap = ref.get()
+        if not snap.exists or len((snap.to_dict() or {}).get("client_events") or []) >= MAX_CLIENT_EVENTS:
+            return False
+        ref.set({"client_events": firestore.ArrayUnion([{"received_at": _now().isoformat(), **event}])}, merge=True)
+        return True
+    except Exception:
+        logger.exception("Error recording client event for phone_number=%s", phone_number)
+        return False
+
+
 def update_language(client, phone_number: str, language: str, prompt_variant: str) -> bool:
     """Updates the language and corresponding prompt variant for a conversation."""
     try:

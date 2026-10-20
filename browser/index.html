@@ -229,7 +229,7 @@
   const KV_ORDER = ["id", "phone", "profile_name", "variant", "prompt_variant", "language", "phase", "outcome", "intro_sent", "started_at", "last_activity_at", "debriefed_at",
                     "duration_min", "user_turn_count", "n_messages", "n_chars", "user_chars", "rating_pre", "rating_post", "rating_change",
                     "rating_pre_system", "rating_post_system", "rating_change_system", "rating_exit", "rating_exit_system", "n_ratings", "n_later_ratings",
-                    "debriefed", "ended_reason", "exit_choice", "exit_at", "screened_out_reason", "variant_assigned_at", "initial_rating", "latest_rating", "ad_source_id", "ctwa_clid", "n_referrals"];
+                    "debriefed", "ended_reason", "exit_choice", "exit_at", "screened_out_reason", "variant_assigned_at", "initial_rating", "latest_rating", "ad_source_id", "ctwa_clid", "n_referrals", "n_back"];
   function sparkline(ratings) {
     if (!ratings.length) return null;
     const w = 160, h = 40, pad = 4, n = ratings.length;
@@ -301,6 +301,10 @@
     right.append(tc);
     // raw metadata
     const raw = el("div", "card"); raw.append(el("h2", null, "Raw webhook metadata"));
+    if (d.client_events && d.client_events.length) {
+      const ce = el("details"); ce.append(el("summary", null, `page events while the questions were open (${d.client_events.length}: ${d.client_events.map((e) => e.name).join(", ")})`));
+      ce.append(Object.assign(el("pre"), { textContent: d.client_events.map((e) => `${e.at}  ${e.name}${e.kind ? " " + e.kind : ""}${e.question ? " q" + e.question : ""}${e.collapsed != null ? (e.collapsed ? " (sheet collapsed)" : " (sheet open)") : ""}`).join("\n") })); tc.append(ce);
+    }
     const det = el("details"); det.append(el("summary", null, `first message from Meta${d.first_message_raw?.referral ? " (includes ad referral)" : ""}, referrals (${d.referrals.length})`));
     det.append(Object.assign(el("pre"), { textContent: JSON.stringify({ first_message_raw: d.first_message_raw, referrals: d.referrals }, null, 2) }));
     raw.append(det); right.append(raw);

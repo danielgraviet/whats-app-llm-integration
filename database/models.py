@@ -68,6 +68,9 @@ class Conversation(pydantic.BaseModel):
     page_loads: int = 0
     last_seen_at: Optional[datetime] = None
     visits: List[Dict[str, Any]] = []
+    # Client-side UI events (web): {name, at, received_at, ...}; see
+    # firebase.record_client_event. Capped at MAX_CLIENT_EVENTS.
+    client_events: List[Dict[str, Any]] = []
     # The ratings the primary analysis uses: before the conversation (pre), after
     # the first TRUST_CHECK_INTERVAL turns (post) and, optionally, when the
     # participant ends early (exit). *_system is question 1 (electoral system as a

@@ -156,6 +156,22 @@ def test_end_skipped_after_rating_and_inactivity(http):
         assert (d["exit"].get("choice") == choice) if choice != "inactivity" else d["exit"] == {}
 
 
+def test_client_events_are_stored_validated_and_capped(http):
+    sid, _ = qualified(http)
+    r = http.post(f"api/session/{sid}/event", json={"name": "sheet_shown", "at": "2026-10-21T10:00:00Z", "kind": "check_in"})
+    assert r.status_code == 204
+    http.post(f"api/session/{sid}/event", json={"name": "back", "at": "2026-10-21T10:00:05Z", "kind": "check_in", "question": 1, "collapsed": None})
+    ev = doc(sid)["client_events"]
+    assert [e["name"] for e in ev] == ["sheet_shown", "back"] and ev[1]["question"] == 1 and "collapsed" not in ev[1]
+    assert all("received_at" in e for e in ev)
+    assert http.post(f"api/session/{sid}/event", json={"name": "evil", "at": "x"}).status_code == 422
+    assert http.post("api/session/web_missing/event", json={"name": "back", "at": "x"}).status_code == 204   # ignored, never 500
+    for k in range(webapp.firebase.MAX_CLIENT_EVENTS + 5):
+        http.post(f"api/session/{sid}/event", json={"name": "hidden", "at": f"t{k}"})
+    assert len(doc(sid)["client_events"]) == webapp.firebase.MAX_CLIENT_EVENTS
+    assert "rate_reopen" in http.get("api/text").json()
+
+
 def test_ratings_every_six_messages_and_close_after_24(http):
     sid, _ = qualified(http)
     for n in range(1, 25):
