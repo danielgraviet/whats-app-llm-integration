@@ -47,6 +47,18 @@ ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screening_eligible_voter T
 ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screening_passed BOOLEAN;
 ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screened_out_at TIMESTAMPTZ;
 ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS page_loads INTEGER;
+-- Phase 2 (Oct 2026): two questions per rating (urnas = primary, kept in the
+-- unsuffixed columns; *_system = trust in the electoral system as a whole),
+-- optional exit rating, and why a session was filtered or ended.
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_pre_system INTEGER;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_post_system INTEGER;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_exit INTEGER;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS rating_exit_system INTEGER;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS screened_out_reason TEXT;   -- eligibility | high_trust
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS ended_reason TEXT;          -- limit | button | inactivity
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS exit_choice TEXT;           -- rated | skipped | after_rating
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS exit_at TIMESTAMPTZ;
+ALTER TABLE wa_conversations ADD COLUMN IF NOT EXISTS variant_assigned_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS wa_conversations_started_idx   ON wa_conversations (started_at);
 CREATE INDEX IF NOT EXISTS wa_conversations_debriefed_idx ON wa_conversations (debriefed_at);
 CREATE INDEX IF NOT EXISTS wa_conversations_phase_idx     ON wa_conversations (phase);
@@ -63,16 +75,20 @@ CREATE TABLE IF NOT EXISTS wa_messages (
 );
 SELECT create_hypertable('wa_messages', by_range('ts'), if_not_exists => TRUE);
 
--- One row per trust rating.
+-- One row per trust rating (phase 2: one row per pair of answers).
 CREATE TABLE IF NOT EXISTS wa_ratings (
     ts             TIMESTAMPTZ NOT NULL,
     phone_hash     TEXT NOT NULL,
     message_index  INTEGER NOT NULL,     -- 0 = initial rating
-    score          INTEGER NOT NULL,
+    score          INTEGER NOT NULL,     -- voting-machine question (primary measure)
     variant        TEXT,
+    score_system   INTEGER,              -- electoral system as a whole (phase 2)
+    slot           TEXT,                 -- pre | post | exit | NULL (later check-ins)
     UNIQUE (phone_hash, message_index, ts)
 );
 SELECT create_hypertable('wa_ratings', by_range('ts'), if_not_exists => TRUE);
+ALTER TABLE wa_ratings ADD COLUMN IF NOT EXISTS score_system INTEGER;
+ALTER TABLE wa_ratings ADD COLUMN IF NOT EXISTS slot TEXT;
 
 -- Sampled gauges, one row per poll tick (zeros included so Grafana draws a
 -- flat line when nothing is happening).

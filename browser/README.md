@@ -123,3 +123,16 @@ df["transcript"] = df["transcript_json"].map(json.loads)
 df.groupby("variant")["rating_change"].mean()
 ```
 
+
+## Phase 2 (Oct 2026)
+
+Point the web browser at `FIRESTORE_COLLECTION=web_conversations_phase2`. The
+list shows `pre → post (change)` for the voting-machine question, then
+`sys a→b` for the electoral-system question and `exit n` when the optional
+exit rating was answered. Outcomes: `ended limit` / `ended button` /
+`ended inactivity`, `high trust` (filtered at the baseline), `abandoned after
+post`, plus the earlier ones. The detail view's ratings table has both scores,
+the slot and the number of button taps. The CSV gains `rating_pre_system`,
+`rating_post_system`, `rating_change_system`, `rating_exit`,
+`rating_exit_system`, `ratings_system`, `screened_out_reason`, `ended_reason`,
+`exit_choice`, `exit_at`, `variant_assigned_at`.

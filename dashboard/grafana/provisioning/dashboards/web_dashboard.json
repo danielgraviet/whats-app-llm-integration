@@ -1,6 +1,6 @@
 {
   "uid": "web-study",
-  "title": "Web Study",
+  "title": "Web Study (phase 2)",
   "description": "Live and historical view of the WhatsApp LLM study, fed from Firestore by dashboard/export_to_postgres.py.",
   "tags": [
     "whatsapp",
@@ -494,8 +494,8 @@
     {
       "id": 9,
       "type": "stat",
-      "title": "Completed (debriefed)",
-      "description": "",
+      "title": "Completed (pre + post)",
+      "description": "Participants with both the baseline and the post rating (after the 6th message): the research-usable outcome.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "wa-timescale-web"
@@ -515,7 +515,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND (phase = 'ended' OR debriefed_at IS NOT NULL)\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND rating_post IS NOT NULL",
           "refId": "A"
         }
       ],
@@ -582,7 +582,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'in progress'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END = 'in progress'\n",
           "refId": "A"
         }
       ],
@@ -649,7 +649,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END LIKE 'abandoned%'\n",
           "refId": "A"
         }
       ],
@@ -716,7 +716,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'never rated'\n",
+          "rawSql": "SELECT count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END = 'never rated'\n",
           "refId": "A"
         }
       ],
@@ -763,7 +763,7 @@
       "id": 13,
       "type": "stat",
       "title": "Completion rate",
-      "description": "",
+      "description": "Share of participants (started in range) with a post rating.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "wa-timescale-web"
@@ -783,7 +783,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT 100.0 * count(*) FILTER (WHERE phase = 'ended' OR debriefed_at IS NOT NULL) / NULLIF(count(*), 0) AS value FROM wa_conversations WHERE $__timeFilter(started_at)\n",
+          "rawSql": "SELECT 100.0 * count(*) FILTER (WHERE rating_post IS NOT NULL) / NULLIF(count(*), 0) AS value FROM wa_conversations WHERE $__timeFilter(started_at)",
           "refId": "A"
         }
       ],
@@ -830,7 +830,7 @@
     {
       "id": 14,
       "type": "stat",
-      "title": "Avg turns (completed)",
+      "title": "Avg turns (ended)",
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -919,7 +919,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(user_turn_count) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned'\n",
+          "rawSql": "SELECT avg(user_turn_count) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END LIKE 'abandoned%'\n",
           "refId": "A"
         }
       ],
@@ -966,7 +966,7 @@
     {
       "id": 16,
       "type": "stat",
-      "title": "Avg duration (completed)",
+      "title": "Avg duration (ended)",
       "description": "",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1055,7 +1055,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(extract(epoch FROM (last_activity_at - started_at)) / 60.0) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END = 'abandoned' AND started_at IS NOT NULL\n",
+          "rawSql": "SELECT avg(extract(epoch FROM (last_activity_at - started_at)) / 60.0) AS value FROM wa_conversations WHERE $__timeFilter(started_at) AND CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END LIKE 'abandoned%' AND started_at IS NOT NULL\n",
           "refId": "A"
         }
       ],
@@ -1331,7 +1331,7 @@
     {
       "id": 22,
       "type": "timeseries",
-      "title": "Conversations started / completed per hour",
+      "title": "Conversations started / post-rated / ended per hour",
       "description": "Started = first message received. Completed = debrief sent. Gap-filled to zero.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1352,7 +1352,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT time, coalesce(started, 0) AS \"started\", coalesce(completed, 0) AS \"completed\" FROM (\n  SELECT time_bucket_gapfill('1 hour', started_at) AS time, count(*) AS started\n  FROM wa_conversations WHERE $__timeFilter(started_at) GROUP BY 1\n) s\nFULL OUTER JOIN (\n  SELECT time_bucket_gapfill('1 hour', debriefed_at) AS time, count(*) AS completed\n  FROM wa_conversations WHERE $__timeFilter(debriefed_at) GROUP BY 1\n) c USING (time)\nORDER BY time\n",
+          "rawSql": "SELECT time, coalesce(started, 0) AS \"started\", coalesce(post_rated, 0) AS \"post rated\", coalesce(ended, 0) AS \"ended\" FROM (\n  SELECT time_bucket_gapfill('1 hour', started_at) AS time, count(*) AS started\n  FROM wa_conversations WHERE $__timeFilter(started_at) GROUP BY 1\n) s\nFULL OUTER JOIN (\n  SELECT time_bucket_gapfill('1 hour', ts) AS time, count(*) AS post_rated\n  FROM wa_ratings WHERE $__timeFilter(ts) AND slot = 'post' GROUP BY 1\n) p USING (time)\nFULL OUTER JOIN (\n  SELECT time_bucket_gapfill('1 hour', debriefed_at) AS time, count(*) AS ended\n  FROM wa_conversations WHERE $__timeFilter(debriefed_at) GROUP BY 1\n) c USING (time)\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -1447,7 +1447,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
+          "rawSql": "SELECT CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END AS outcome, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
           "refId": "A"
         }
       ],
@@ -1521,7 +1521,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT coalesce(variant, 'unassigned') AS variant, count(*) AS value\nFROM wa_conversations\nWHERE $__timeFilter(started_at)\nGROUP BY 1 ORDER BY 1\n",
+          "rawSql": "SELECT coalesce(nullif(variant, ''), 'unassigned') AS variant, count(*) AS value FROM wa_conversations WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1661,8 +1661,8 @@
     {
       "id": 28,
       "type": "barchart",
-      "title": "Trust rating by variant: pre vs post",
-      "description": "Primary outcome: mean rating before the conversation (pre) and after the first check-in (post), 0-100 scale, per condition. n = participants with both ratings. Later ratings are in later_ratings.",
+      "title": "Trust rating by variant: pre vs post (urnas, and system)",
+      "description": "Mean answers, 1-7. 'pre'/'post' are the voting-machine question (primary); 'pre sys'/'post sys' the electoral-system question. n = participants with both ratings.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "wa-timescale-web"
@@ -1682,7 +1682,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  variant,\n  round(avg(rating_pre)::numeric, 2)  AS \"pre\",\n  round(avg(rating_post)::numeric, 2) AS \"post\",\n  round(avg(rating_post - rating_pre)::numeric, 2) AS \"change\",\n  count(*) AS \"n\"\nFROM wa_conversations\nWHERE $__timeFilter(started_at) AND rating_pre IS NOT NULL AND rating_post IS NOT NULL\nGROUP BY variant ORDER BY variant\n",
+          "rawSql": "SELECT\n  variant,\n  round(avg(rating_pre)::numeric, 2)  AS \"pre\",\n  round(avg(rating_post)::numeric, 2) AS \"post\",\n  round(avg(rating_post - rating_pre)::numeric, 2) AS \"change\",\n  round(avg(rating_pre_system)::numeric, 2)  AS \"pre sys\",\n  round(avg(rating_post_system)::numeric, 2) AS \"post sys\",\n  count(*) AS \"n\"\nFROM wa_conversations\nWHERE $__timeFilter(started_at) AND rating_pre IS NOT NULL AND rating_post IS NOT NULL\nGROUP BY variant ORDER BY variant",
           "refId": "A"
         }
       ],
@@ -1714,7 +1714,7 @@
               }
             ]
           },
-          "max": 100
+          "max": 7
         },
         "overrides": []
       },
@@ -1741,7 +1741,7 @@
     {
       "id": 29,
       "type": "timeseries",
-      "title": "Mean trust rating over time (all participants)",
+      "title": "Mean trust rating over time (all ratings)",
       "description": "Hourly mean of every rating submitted. Gaps are hours with no ratings.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1762,7 +1762,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  time_bucket_gapfill('1 hour', ts) AS time,\n  avg(score) AS \"mean rating\"\nFROM wa_ratings\nWHERE $__timeFilter(ts)\nGROUP BY 1 ORDER BY 1\n",
+          "rawSql": "SELECT time_bucket_gapfill('1 hour', ts) AS time, avg(score) AS \"urnas\", avg(score_system) AS \"system\" FROM wa_ratings WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -1773,7 +1773,7 @@
             "mode": "palette-classic"
           },
           "unit": "short",
-          "min": 0,
+          "min": 1,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "linear",
@@ -1799,7 +1799,8 @@
               }
             ]
           },
-          "mappings": []
+          "mappings": [],
+          "max": 7
         },
         "overrides": []
       },
@@ -1939,7 +1940,7 @@
     {
       "id": 32,
       "type": "histogram",
-      "title": "Rating change (post − pre)",
+      "title": "Rating change (post − pre, urnas)",
       "description": "Per-participant change on the primary outcome.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -2031,7 +2032,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  phone_hash AS participant,\n  variant,\n  language,\n  phase,\n  CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'debriefed'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN 'abandoned'\n      ELSE 'in progress'\n    END AS outcome,\n  user_turn_count AS turns,\n  rating_pre AS \"pre\",\n  rating_post AS \"post\",\n  rating_post - rating_pre AS \"change\",\n  ad_source_id AS \"ad id\",\n  started_at,\n  last_activity_at,\n  debriefed_at\nFROM wa_conversations\nWHERE $__timeFilter(last_activity_at)\nORDER BY last_activity_at DESC\nLIMIT 200\n",
+          "rawSql": "SELECT\n  phone_hash AS participant,\n  variant,\n  language,\n  phase,\n  CASE\n      WHEN phase = 'ended' OR debriefed_at IS NOT NULL THEN 'ended ' || coalesce(ended_reason, 'debriefed')\n      WHEN phase = 'screened_out' AND screened_out_reason = 'high_trust' THEN 'high trust'\n      WHEN phase = 'screened_out' THEN 'screened out'\n      WHEN phase = 'awaiting_screening' THEN 'not screened'\n      WHEN NOT intro_sent OR phase = 'awaiting_initial_rating' THEN 'never rated'\n      WHEN last_activity_at < now() - abandon_after() THEN CASE WHEN rating_post IS NOT NULL THEN 'abandoned after post' ELSE 'abandoned' END\n      ELSE 'in progress'\n    END AS outcome,\n  user_turn_count AS turns,\n  rating_pre AS \"pre\",\n  rating_post AS \"post\",\n  rating_post - rating_pre AS \"change\",\n  rating_pre_system AS \"pre sys\",\n  rating_post_system AS \"post sys\",\n  rating_exit AS \"exit\",\n  exit_choice AS \"exit choice\",\n  ad_source_id AS \"ad id\",\n  started_at,\n  last_activity_at,\n  debriefed_at\nFROM wa_conversations\nWHERE $__timeFilter(last_activity_at)\nORDER BY last_activity_at DESC\nLIMIT 200\n",
           "refId": "A"
         }
       ],

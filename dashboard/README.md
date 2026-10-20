@@ -146,6 +146,35 @@ CREATE OR REPLACE FUNCTION abandon_after() RETURNS interval
     LANGUAGE sql IMMUTABLE AS $$ SELECT interval '48 hours' $$;
 ```
 
+## Phase 2 of the web study (Oct 2026)
+
+The phase-2 design (two trust questions on a 1-7 scale, high-trust filter,
+three arms, Encerrar conversa, 24-message limit) writes to the collection
+`web_conversations_phase2`; the phase-1 data stays untouched in
+`web_conversations`. To switch the web dashboard over:
+
+```bash
+# 1. back up the phase-1 mirror, then empty it (the Firestore data is the source of truth)
+docker exec wa-timescaledb pg_dump -U postgres webstudy > backups/webstudy_phase1_$(date +%F).sql
+docker exec -i wa-timescaledb psql -U postgres -d webstudy -c "TRUNCATE wa_conversations, wa_messages, wa_ratings, rt_metrics, poller_state"
+# 2. add the new columns (safe to re-run)
+docker exec -i wa-timescaledb psql -U postgres -d webstudy < schema.sql
+# 3. point the poller at the new collection and backfill
+sed -i 's/^FIRESTORE_COLLECTION=.*/FIRESTORE_COLLECTION=web_conversations_phase2/' .env.web
+cd .. && DASHBOARD_ENV_FILE=dashboard/.env.web python dashboard/export_to_postgres.py --backfill
+```
+
+New columns: `rating_pre_system`, `rating_post_system`, `rating_exit`,
+`rating_exit_system` (question 1 = electoral system; the unsuffixed columns
+stay the voting-machine question), `screened_out_reason` (`eligibility` |
+`high_trust`), `ended_reason` (`limit` | `button` | `inactivity`),
+`exit_choice`, `exit_at`, `variant_assigned_at`; and on `wa_ratings`,
+`score_system` and `slot` (`pre` | `post` | `exit` | NULL). The "Web Study
+(phase 2)" dashboard counts "completed" as having a post rating, shows the
+outcome as `ended <reason>` / `high trust` / `abandoned after post`, and plots
+both questions on the 1-7 scale. Grafana picks up the provisioned dashboard on
+restart (`docker compose restart grafana`).
+
 ## Second study (web)
 
 The web version of the study (`webchat/`) writes to Firestore collection

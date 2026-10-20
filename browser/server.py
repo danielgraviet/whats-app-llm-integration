@@ -136,17 +136,19 @@ def _jsonable(v: Any) -> Any:
     return v
 
 
-def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, now: dt.datetime, debriefed: bool = False) -> str:
+def outcome_of(phase: str, intro_sent: bool, last_activity: dt.datetime | None, now: dt.datetime, debriefed: bool = False,
+               screened_out_reason: str | None = None, ended_reason: str | None = None, has_post: bool = False) -> str:
+    """Same categories as the Grafana "Outcome" panel (dashboard/grafana/.../web_dashboard.json)."""
     if phase == "ended" or debriefed:
-        return "debriefed"      # the conversation may still be going; the study measurement is complete
+        return f"ended {ended_reason}" if ended_reason else "debriefed"   # phase 2: limit | button | inactivity
     if phase == "screened_out":
-        return "screened out"   # failed eligibility (under 18 / not eligible to vote); document kept for attribution
+        return "high trust" if screened_out_reason == "high_trust" else "screened out"
     if phase == "awaiting_screening":
         return "not screened"   # opened the page but never finished the two eligibility questions
     if not intro_sent or phase == "awaiting_initial_rating":
         return "never rated"
     if last_activity and last_activity < now - dt.timedelta(hours=ABANDON_HOURS):
-        return "abandoned"
+        return "abandoned after post" if has_post else "abandoned"
     return "in progress"
 
 
@@ -155,17 +157,21 @@ CSV_COLUMNS = [
     "id", "phone", "profile_name", "variant", "prompt_variant", "language",
     # state
     "phase", "outcome", "intro_sent",
-    # eligibility screening (sim / nao / nao_sei; blank = not answered)
-    "screening_age_18", "screening_eligible_voter", "screening_passed", "screened_out_at", "page_loads",
+    # eligibility screening (sim / nao / nao_sei; blank = not answered); screened_out_reason = eligibility | high_trust
+    "screening_age_18", "screening_eligible_voter", "screening_passed", "screened_out_at", "screened_out_reason", "page_loads",
+    # how the conversation ended (phase 2): ended_reason = limit | button | inactivity; exit_choice = rated | skipped | after_rating
+    "ended_reason", "exit_choice", "exit_at", "variant_assigned_at",
     # timeline
     "started_at", "first_message_at", "last_user_msg_at", "last_assistant_msg_at", "last_activity_at", "debriefed_at", "duration_min",
     # volume
     "user_turn_count", "n_messages", "n_user_messages", "n_assistant_messages",
     "n_chars", "user_chars", "assistant_chars", "avg_user_msg_chars", "avg_assistant_msg_chars",
-    # trust ratings: pre (before the conversation) and post (after the first check-in) are the
-    # primary outcome; later_ratings_json holds any ratings after those two
-    "rating_pre", "rating_post", "rating_change", "n_ratings", "n_later_ratings", "later_ratings_json",
-    "initial_rating", "latest_rating", "ratings", "ratings_json", "debriefed",
+    # trust ratings: pre (before the conversation) and post (after the 6th message) are the primary
+    # outcome on the voting-machine question; *_system is question 1 (electoral system as a whole);
+    # rating_exit* is the optional exit rating; later_ratings_json holds the other check-ins
+    "rating_pre", "rating_post", "rating_change", "rating_pre_system", "rating_post_system", "rating_change_system",
+    "rating_exit", "rating_exit_system", "n_ratings", "n_later_ratings", "later_ratings_json",
+    "initial_rating", "latest_rating", "ratings", "ratings_system", "ratings_json", "debriefed",
     # ad attribution
     "ad_source_id", "ad_source_type", "ad_source_url", "ad_headline", "ad_body", "ad_media_type", "ctwa_clid", "n_referrals",
     "first_message_id", "first_message_type",
@@ -193,7 +199,9 @@ class Conv:
                 "timestamp": _iso(_utc(m.get("timestamp"))),
             })
         self.ratings = sorted(
-            [{"score": r.get("score"), "message_index": r.get("message_index"), "timestamp": _iso(_utc(r.get("timestamp")))}
+            [{"score": r.get("score"), "score_system": r.get("score_system"), "slot": r.get("slot"),
+              "message_index": r.get("message_index"), "timestamp": _iso(_utc(r.get("timestamp"))),
+              "n_taps": len(r.get("events") or [])}
              for r in (d.get("feeling_array") or []) if r.get("score") is not None],
             key=lambda r: ((r["message_index"] or 0), r["timestamp"] or ""),
         )
@@ -210,11 +218,23 @@ class Conv:
             self.rating_pre = next((r["score"] for r in self.ratings if r["message_index"] == 0), self.ratings[0]["score"])
         if self.rating_post is None and len(self.ratings) >= 2:
             self.rating_post = self.ratings[1]["score"]
-        self.later_ratings = self.ratings[2:]
+        self.rating_pre_system = d.get("rating_pre_system")
+        self.rating_post_system = d.get("rating_post_system")
+        self.rating_exit = d.get("rating_exit")
+        self.rating_exit_system = d.get("rating_exit_system")
+        # phase-2 rows carry a slot; the later check-ins are the unslotted ones. Older rows: positions 3+.
+        if any(r["slot"] for r in self.ratings):
+            self.later_ratings = [r for r in self.ratings if r["slot"] is None]
+        else:
+            self.later_ratings = self.ratings[2:]
         self.phase = d.get("conversation_phase") or "unknown"
         self.intro_sent = bool(d.get("intro_sent"))
         self.screening = d.get("screening") or {}
         self.screened_out_at = _utc(d.get("screened_out_at"))
+        self.screened_out_reason = d.get("screened_out_reason")
+        self.ended_reason = d.get("ended_reason")
+        self.exit = d.get("exit") or {}
+        self.variant_assigned_at = _utc(d.get("variant_assigned_at"))
         self.page_loads = int(d.get("page_loads") or 0)
         pv = d.get("prompt_variant") or ""
         self.variant = pv.split("_prompt_", 1)[1] if "_prompt_" in pv else pv
@@ -224,6 +244,10 @@ class Conv:
         self.ctwa_clid = first_ref.get("ctwa_clid")
         self.n_referrals = len(referrals)
         self.profile_name = ((d.get("first_contacts_raw") or [{}])[0].get("profile") or {}).get("name")
+
+    def outcome(self, now: dt.datetime) -> str:
+        return outcome_of(self.phase, self.intro_sent, self.last_activity_at, now, self.debriefed_at is not None,
+                          self.screened_out_reason, self.ended_reason, self.rating_post is not None)
 
     def summary(self, now: dt.datetime) -> dict:
         initial = next((r["score"] for r in self.ratings if r["message_index"] == 0), None)
@@ -241,12 +265,17 @@ class Conv:
             "prompt_variant": self.raw.get("prompt_variant"),
             "language": self.raw.get("language"),
             "phase": self.phase,
-            "outcome": outcome_of(self.phase, self.intro_sent, self.last_activity_at, now, self.debriefed_at is not None),
+            "outcome": self.outcome(now),
             "intro_sent": self.intro_sent,
             "screening_age_18": self.screening.get("age_18"),
             "screening_eligible_voter": self.screening.get("eligible_voter"),
             "screening_passed": self.screening.get("passed"),
             "screened_out_at": _iso(self.screened_out_at),
+            "screened_out_reason": self.screened_out_reason,
+            "ended_reason": self.ended_reason,
+            "exit_choice": self.exit.get("choice"),
+            "exit_at": _iso(_utc(self.exit.get("at"))),
+            "variant_assigned_at": _iso(self.variant_assigned_at),
             "page_loads": self.page_loads,
             "started_at": _iso(self.started_at),
             "last_activity_at": _iso(self.last_activity_at),
@@ -263,6 +292,11 @@ class Conv:
             "rating_pre": self.rating_pre,
             "rating_post": self.rating_post,
             "rating_change": (self.rating_post - self.rating_pre) if (self.rating_pre is not None and self.rating_post is not None) else None,
+            "rating_pre_system": self.rating_pre_system,
+            "rating_post_system": self.rating_post_system,
+            "rating_change_system": (self.rating_post_system - self.rating_pre_system) if (self.rating_pre_system is not None and self.rating_post_system is not None) else None,
+            "rating_exit": self.rating_exit,
+            "rating_exit_system": self.rating_exit_system,
             "n_later_ratings": len(self.later_ratings),
             "debriefed": self.debriefed_at is not None,
             "ad_source_id": self.ad_source_id,
@@ -313,6 +347,7 @@ class Conv:
             "avg_user_msg_chars": round(sm["user_chars"] / len(user_msgs), 1) if user_msgs else None,
             "avg_assistant_msg_chars": round(sum(len(m["content"]) for m in asst_msgs) / len(asst_msgs), 1) if asst_msgs else None,
             "ratings": ";".join(f"{r['message_index']}:{r['score']}" for r in self.ratings),
+            "ratings_system": ";".join(f"{r['message_index']}:{r['score_system']}" for r in self.ratings if r["score_system"] is not None),
             "ratings_json": json.dumps(self.ratings, ensure_ascii=False),
             "later_ratings_json": json.dumps(self.later_ratings, ensure_ascii=False),
             "ad_source_type": referral.get("source_type"),
@@ -367,7 +402,7 @@ class DemoSource:
                "Entendi, faz sentido.", "Obrigado pela conversa.", "A urna eletrônica é rápida, isso é bom."]
     PT_BOT = ["O que te faz pensar isso?", "Pode me contar mais sobre essa experiência?", "Como você acha que outras pessoas veem essa questão?",
               "O que te ajudaria a confiar mais?", "Entendo. E o que você já ouviu sobre as auditorias?", "Obrigado por compartilhar isso."]
-    VARIANTS = ["A_control_condition", "B_motivational_learning", "C_perspective", "D_christmas_dinner", "E_critical_thinking"]
+    VARIANTS = ["A_control_v6", "B_motivational_v6", "C_refutational_v6"]
 
     def __init__(self, n: int = 60, seed: int = 7):
         rnd = random.Random(seed)
@@ -385,16 +420,27 @@ class DemoSource:
                 t += dt.timedelta(minutes=rnd.randint(1, 6))
             ratings = []
             intro_sent = turns > 0 or rnd.random() > 0.3
+            extra = {}
             if turns > 0:
-                ratings.append({"score": rnd.randint(1, 10), "message_index": 0, "timestamp": start + dt.timedelta(seconds=40)})
-                for mi in (3, 6):
-                    if turns >= mi:
-                        ratings.append({"score": max(1, min(10, ratings[0]["score"] + rnd.randint(-2, 3))), "message_index": mi, "timestamp": start + dt.timedelta(minutes=mi * 3)})
+                pre = {"score": rnd.randint(1, 6), "score_system": rnd.randint(1, 7), "message_index": 0, "slot": "pre",
+                       "timestamp": start + dt.timedelta(seconds=40), "events": []}
+                ratings.append(pre); extra.update(rating_pre=pre["score"], rating_pre_system=pre["score_system"])
+                if turns >= 6:
+                    post = {"score": max(1, min(7, pre["score"] + rnd.randint(-1, 2))), "score_system": max(1, min(7, pre["score_system"] + rnd.randint(-1, 1))),
+                            "message_index": 6, "slot": "post", "timestamp": start + dt.timedelta(minutes=18), "events": []}
+                    ratings.append(post); extra.update(rating_post=post["score"], rating_post_system=post["score_system"])
             phase = "ended" if turns >= 8 else ("awaiting_initial_rating" if turns == 0 else rnd.choice(["normal", "normal", "awaiting_check_in_rating"]))
+            if phase == "ended":
+                extra["ended_reason"] = rnd.choice(["button", "button", "inactivity", "limit"])
+                if extra["ended_reason"] == "button":
+                    choice = rnd.choice(["rated", "skipped", "after_rating"]); extra["exit"] = {"choice": choice, "at": start + dt.timedelta(minutes=25), "user_turns": turns}
+                    if choice == "rated":
+                        ex = {"score": rnd.randint(1, 7), "score_system": rnd.randint(1, 7), "message_index": turns, "slot": "exit", "timestamp": start + dt.timedelta(minutes=25), "events": []}
+                        ratings.append(ex); extra.update(rating_exit=ex["score"], rating_exit_system=ex["score_system"])
             last = history[-1]["timestamp"] if history else start
             ref = {"source_type": "ad", "source_id": f"AD_{rnd.randint(1, 3)}", "ctwa_clid": f"clid{i}", "headline": "Converse sobre as urnas"} if rnd.random() > 0.2 else None
-            d = {"history": history, "updated_at": last, "language": "PT", "prompt_variant": f"PT_prompt_{variant}", "conversation_phase": phase,
-                 "feeling_array": ratings, "user_turn_count": turns, "intro_sent": intro_sent, "pending_ai_response": "",
+            d = {"history": history, "updated_at": last, "language": "PT", "prompt_variant": f"PT_prompt_{variant}" if turns > 0 else "", "conversation_phase": phase,
+                 "feeling_array": ratings, "user_turn_count": turns, "intro_sent": intro_sent, "pending_ai_response": "", **extra,
                  "debriefed_at": last if phase == "ended" else None,
                  "first_message_raw": {"from": phone, "id": f"wamid.demo{i}", "timestamp": str(int(start.timestamp())), "type": "text", "text": {"body": "oi"}, **({"referral": ref} if ref else {})},
                  "first_contacts_raw": [{"profile": {"name": "Demo"}, "wa_id": phone}],
@@ -510,7 +556,7 @@ def status():
     now = dt.datetime.now(dt.timezone.utc)
     counts: dict[str, int] = {}
     for c in STORE.convs.values():
-        o = outcome_of(c.phase, c.intro_sent, c.last_activity_at, now, c.debriefed_at is not None)
+        o = c.outcome(now)
         counts[o] = counts.get(o, 0) + 1
     return {"total": len(STORE.convs), "by_outcome": counts, "last_refresh": _iso(STORE.last_refresh),
             "last_error": STORE.last_error, "demo": DEMO, "show_phone": SHOW_PHONE,

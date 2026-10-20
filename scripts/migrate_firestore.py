@@ -50,10 +50,12 @@ def client_for(path: str) -> firestore.Client:
 
 
 def copy_collection(src: firestore.CollectionReference, dst: firestore.CollectionReference,
-                    execute: bool, overwrite: bool, stats: dict, depth: int = 0) -> None:
+                    execute: bool, overwrite: bool, stats: dict, depth: int = 0, only: set | None = None) -> None:
     existing = set() if overwrite else {d.id for d in dst.list_documents()}
     batch, pending = (dst._client.batch() if execute else None), 0
     for snap in src.stream():
+        if only is not None and depth == 0 and snap.id not in only:
+            continue
         stats["source"] += 1
         if snap.id in existing:
             stats["skipped"] += 1
@@ -66,7 +68,7 @@ def copy_collection(src: firestore.CollectionReference, dst: firestore.Collectio
                     batch.commit(); stats["written"] += pending
                     batch, pending = dst._client.batch(), 0
         for sub in snap.reference.collections():   # subcollections, if any
-            copy_collection(sub, dst.document(snap.id).collection(sub.id), execute, overwrite, stats, depth + 1)
+            copy_collection(sub, dst.document(snap.id).collection(sub.id), execute, overwrite, stats, depth + 1, only)
     if execute and pending:
         batch.commit(); stats["written"] += pending
 
@@ -76,20 +78,29 @@ def main() -> int:
     ap.add_argument("--source-key", required=True)
     ap.add_argument("--dest-key", required=True)
     ap.add_argument("--collections", nargs="+", default=["web_conversations", "conversations"])
+    ap.add_argument("--dest-collection", help="write into this collection instead of the source's name "
+                    "(one --collections entry only); allows copying within one project")
+    ap.add_argument("--only-ids-file", help="copy only the document ids listed in this file (one per line)")
     ap.add_argument("--execute", action="store_true", help="actually write; default is a dry run")
     ap.add_argument("--overwrite", action="store_true", help="replace documents that already exist in the destination")
     args = ap.parse_args()
 
     src, dst = client_for(args.source_key), client_for(args.dest_key)
-    if src.project == dst.project:
-        sys.exit(f"source and destination are the same project ({src.project}); refusing")
+    if args.dest_collection and len(args.collections) != 1:
+        sys.exit("--dest-collection takes exactly one --collections entry")
+    if src.project == dst.project and (not args.dest_collection or args.dest_collection == args.collections[0]):
+        sys.exit(f"source and destination are the same project ({src.project}) and collection; refusing")
+    only = None
+    if args.only_ids_file:
+        only = {line.strip() for line in Path(args.only_ids_file).read_text().splitlines() if line.strip()}
     print(f"{'COPY' if args.execute else 'DRY RUN'}: {src.project} -> {dst.project}")
 
     for name in args.collections:
+        dest_name = args.dest_collection or name
         stats = {"source": 0, "skipped": 0, "to_copy": 0, "written": 0}
-        copy_collection(src.collection(name), dst.collection(name), args.execute, args.overwrite, stats)
-        print(f"  {name:20s} source={stats['source']:5d}  already in dest={stats['skipped']:5d}  "
-              f"{'written' if args.execute else 'would write'}={stats['written'] if args.execute else stats['to_copy']:5d}")
+        copy_collection(src.collection(name), dst.collection(dest_name), args.execute, args.overwrite, stats, only=only)
+        print(f"  {name} -> {dest_name}: source={stats['source']}  already in dest={stats['skipped']}  "
+              f"{'written' if args.execute else 'would write'}={stats['written'] if args.execute else stats['to_copy']}")
     if not args.execute:
         print("nothing written (add --execute to copy)")
     return 0
